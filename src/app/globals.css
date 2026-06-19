@@ -1,26 +1,52 @@
+/* STREAMING_CHUNK:Configuring Tailwind v4 with the Dulhan Central theme tokens... */
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+@theme {
+--color-primary: #7d2d3d;
+--color-primary-container: #ffd9de;
+--color-on-primary: #ffffff;
+--color-on-primary-container: #3d0014;
+
+--color-secondary: #745850;
+--color-secondary-container: #fed7cd;
+--color-on-secondary: #ffffff;
+--color-on-secondary-container: #795c54;
+
+--color-surface: #fff8f5;
+--color-surface-dim: #e1d8d4;
+--color-surface-bright: #fff8f5;
+--color-surface-container-lowest: #ffffff;
+--color-surface-container-low: #fbf2ed;
+--color-surface-container: #f5ece8;
+--color-surface-container-high: #ebe7e5;
+--color-surface-container-highest: #e5e2df;
+
+--color-on-surface: #1c1b1a;
+--color-on-surface-variant: #4d4635;
+
+--color-background: #fff8f5;
+--color-on-background: #1c1b1a;
+
+--color-outline: #7f7663;
+--color-outline-variant: #d0c5af;
+
+/* Custom Spacing */
+--spacing-gutter: 32px;
+--spacing-margin-mobile: 24px;
+--spacing-margin-desktop: 64px;
+
+/* Typography Mapping (Assuming these fonts are loaded via next/font in your layout) */
+--font-family-display-lg: "Bodoni Moda", serif;
+--font-family-headline-lg: "Bodoni Moda", serif;
+--font-family-headline-md: "Bodoni Moda", serif;
+--font-family-body-lg: "Libre Caslon Text", serif;
+--font-family-body-md: "Libre Caslon Text", serif;
+--font-family-label-md: "Montserrat", sans-serif;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
+@layer base {
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+background-color: var(--color-background);
+color: var(--color-on-background);
+}
 }
