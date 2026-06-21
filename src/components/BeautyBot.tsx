@@ -2,33 +2,35 @@
 
 import { useState, useRef, useEffect } from 'react';
 
+// Updated Icon to accept custom colors and sizes!
+const MagicLampIcon = ({ className = "w-5 h-5 text-[#8f3546] fill-[#8f3546]" }) => (
+  <svg className={className} viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    <path d="M19.5 12c.3 0 .5-.2.5-.5V10c0-1.7-1.3-3-3-3h-2.3c-.6-1.2-1.7-2-3-2s-2.4.8-3 2H6.5C4.8 7 3.5 8.3 3.5 10v1.5c0 .3.2.5.5.5s.5-.2.5-.5V10c0-.8.7-1.5 1.5-1.5h11c.8 0 1.5.7 1.5 1.5v1.5c0 .3.2.5.5.5zm-8.8-9.5C10.7 2.2 11.3 2 12 2s1.3.2 1.3.5c0 .3-.3.5-.7.5-.4 0-.6.3-.6.6 0 .3.2.5.5.5h1.5c.3 0 .5.2.5.5s-.2.5-.5.5h-1.5c-.3 0-.5.2-.5.5s.2.5.5.5h2.5c.3 0 .5.2.5.5s-.2.5-.5.5H12c-1.7 0-3-1.3-3-3 0-.3.2-.5.5-.5s.7.2.7.5zm-5 11c-.3 0-.5-.2-.5-.5V12c0-.3.2-.5.5-.5s.5.2.5.5v1c0 .3-.2.5-.5.5zm12.5 0c-.3 0-.5-.2-.5-.5V12c0-.3.2-.5.5-.5s.5.2.5.5v1c0 .3-.2.5-.5.5zM12 22c-4.4 0-8-3.6-8-8 0-.3.2-.5.5-.5s.5.2.5.5c0 3.3 2.7 6 6 6s6-2.7 6-6c0-.3.2-.5.5-.5s.5.2.5.5c0 4.4-3.6 8-8 8z" />
+    <path d="M12 16.5c-2.5 0-4.5-2-4.5-4.5s2-4.5 4.5-4.5 4.5 2 4.5 4.5-2 4.5-4.5 4.5zm0-8c-1.9 0-3.5 1.6-3.5 3.5s1.6 3.5 3.5 3.5 3.5-1.6 3.5-3.5-1.6-3.5-3.5-3.5zm7 5.5h-1c-.3 0-.5-.2-.5-.5s.2-.5.5-.5h1c.3 0 .5.2.5.5s-.2.5-.5.5zm-13 0H5c-.3 0-.5-.2-.5-.5s.2-.5.5-.5h1c.3 0 .5.2.5.5s-.2.5-.5.5z" />
+  </svg>
+);
+
 export default function BeautyBot() {
   const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState<{role: 'user' | 'bot', text: string}[]>([
-    { role: 'bot', text: 'Hi! I am your personal AI bridal consultant. Looking for a specific style, budget, or location in Delhi?' }
+  const [chatMessages, setChatMessages] = useState<Array<{ sender: 'bot' | 'user'; text: string }>>([
+    { sender: 'bot', text: "Namaste! I'm DC Genie, your personal AI bridal coordinator. Looking for a specialized artist inside Delhi NCR? Ask me anything!" }
   ]);
-  const [input, setInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  
-  // Ref for auto-scrolling to the bottom of the chat (Typed for TypeScript)
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [inputValue, setInputValue] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement | null>(null);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-
-  // Trigger scroll whenever messages update
   useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatMessages, isTyping, isOpen]);
 
-  const sendMessage = async () => {
-    if (!input.trim()) return;
-    
-    const userMsg = input.trim();
-    setMessages(prev => [...prev, { role: 'user', text: userMsg }]);
-    setInput('');
-    setIsLoading(true);
+  const handleSend = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inputValue.trim()) return;
+
+    const userMsg = inputValue.trim();
+    setChatMessages(prev => [...prev, { sender: 'user', text: userMsg }]);
+    setInputValue('');
+    setIsTyping(true);
 
     try {
       const res = await fetch('/api/chat', {
@@ -36,96 +38,77 @@ export default function BeautyBot() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: userMsg })
       });
-      
       const data = await res.json();
-      setMessages(prev => [...prev, { role: 'bot', text: data.reply || data.error }]);
-    } catch (error) {
-      setMessages(prev => [...prev, { role: 'bot', text: 'Oops! Connection error. Try again.' }]);
+      setChatMessages(prev => [...prev, { sender: 'bot', text: data.reply || "I'm having trouble connecting right now." }]);
+    } catch {
+      setChatMessages(prev => [...prev, { sender: 'bot', text: "I'm having trouble connecting to my AI brain right now." }]);
+    } finally {
+      setIsTyping(false);
     }
-    
-    setIsLoading(false);
   };
 
-  // --- RENDER CLOSED STATE ---
-  if (!isOpen) {
-    return (
-      <button 
-        onClick={() => setIsOpen(true)}
-        className="fixed bottom-6 right-6 bg-rose-600 hover:bg-rose-700 text-white rounded-full p-4 shadow-2xl transition-transform hover:scale-110 z-50 flex items-center justify-center group"
-      >
-        <span className="text-2xl mr-2 group-hover:animate-pulse">✨</span>
-        <span className="font-bold tracking-wide">Ask BeautyBot</span>
-      </button>
-    );
-  }
-
-  // --- RENDER OPEN STATE ---
   return (
-    <div className="fixed bottom-6 right-6 w-[350px] sm:w-[400px] bg-white rounded-2xl shadow-2xl border border-rose-100 overflow-hidden flex flex-col z-50 animate-in slide-in-from-bottom-5">
-      
-      {/* Header */}
-      <div className="bg-rose-600 text-white p-4 flex justify-between items-center shadow-md z-10">
-        <div className="flex items-center gap-2">
-          <span className="text-xl">✨</span>
+    <>
+      <div className={`fixed inset-y-0 right-0 w-[420px] max-w-full bg-white border-l border-gray-150 shadow-2xl z-50 flex flex-col transition-transform duration-500 font-sans-custom ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+        <div className="bg-[#8f3546] p-6 text-white flex items-center gap-4">
+          <div className="w-12 h-12 rounded-full overflow-hidden bg-white border-2 border-white flex items-center justify-center p-1.5 shadow-inner shrink-0">
+            {/* Dark red icon inside the white circle */}
+            <MagicLampIcon className="w-6 h-6 text-[#8f3546] fill-[#8f3546]" />
+          </div>
           <div>
-            <h3 className="font-bold font-serif text-lg leading-tight">Dulhan BeautyBot</h3>
-            <p className="text-rose-200 text-xs">AI Bridal Consultant</p>
+            <h4 className="font-display-custom text-lg font-bold">DC Genie</h4>
+            <p className="text-[10px] uppercase tracking-widest text-white/70 font-semibold">Interactive AI Coordinator</p>
           </div>
+          <button className="ml-auto text-white/70 hover:text-white" onClick={() => setIsOpen(false)}>
+            <span className="material-symbols-outlined text-2xl">close</span>
+          </button>
         </div>
-        <button 
-          onClick={() => setIsOpen(false)} 
-          className="text-rose-200 hover:text-white font-bold p-1 rounded hover:bg-rose-700 transition-colors"
-        >
-          ✕
-        </button>
+
+        <div className="flex-1 p-6 space-y-6 overflow-y-auto bg-gray-50 flex flex-col">
+          {chatMessages.map((msg, idx) => (
+            <div key={idx} className={`flex flex-col ${msg.sender === 'user' ? 'items-end' : 'items-start'} gap-1`}>
+              <div className={`p-4 rounded-2xl max-w-[85%] text-sm font-sans-custom ${msg.sender === 'user' ? 'bg-[#8f3546] text-white rounded-tr-none shadow-md' : 'bg-white text-gray-800 rounded-tl-none border border-gray-100 shadow-sm'}`}>
+                {msg.text}
+              </div>
+              <span className="text-[9px] text-gray-400 uppercase tracking-widest px-1">
+                {msg.sender === 'user' ? 'You' : 'DC Genie'}
+              </span>
+            </div>
+          ))}
+          {isTyping && (
+            <div className="flex flex-col items-start gap-1">
+              <div className="bg-white text-gray-500 px-4 py-3 rounded-2xl rounded-tl-none border border-gray-100 shadow-sm flex items-center gap-1 text-xs">
+                <span className="animate-bounce">●</span>
+                <span className="animate-bounce" style={{animationDelay: '100ms'}}>●</span>
+                <span className="animate-bounce" style={{animationDelay: '200ms'}}>●</span>
+              </div>
+            </div>
+          )}
+          <div ref={chatEndRef} />
+        </div>
+
+        <form onSubmit={handleSend} className="p-4 border-t border-gray-100 bg-white">
+          <div className="flex items-center gap-2 border border-gray-200 rounded-xl px-4 py-2.5">
+            <input 
+              className="flex-1 bg-transparent border-none focus:ring-0 text-sm placeholder-gray-400 text-gray-800 outline-none" 
+              placeholder="Type your bridal query here..." 
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+            />
+            <button type="submit" disabled={isTyping} className="material-symbols-outlined text-[#8f3546] font-bold hover:scale-110 transition-transform disabled:opacity-50">send</button>
+          </div>
+        </form>
       </div>
 
-      {/* Messages Area */}
-      <div className="h-[400px] overflow-y-auto p-4 flex flex-col gap-4 bg-gray-50">
-        {messages.map((msg, idx) => (
-          <div 
-            key={idx} 
-            className={`max-w-[85%] p-3 rounded-2xl text-sm shadow-sm ${
-              msg.role === 'user' 
-                ? 'bg-gray-900 text-white self-end rounded-br-none' 
-                : 'bg-white border border-rose-100 text-gray-800 self-start rounded-bl-none'
-            }`}
-          >
-            {msg.text}
-          </div>
-        ))}
-        
-        {/* Animated Typing Indicator */}
-        {isLoading && (
-          <div className="bg-white border border-rose-100 text-gray-400 self-start rounded-2xl rounded-bl-none p-4 shadow-sm text-sm flex gap-1 items-center">
-            <span className="animate-bounce">●</span>
-            <span className="animate-bounce" style={{ animationDelay: '0.2s' }}>●</span>
-            <span className="animate-bounce" style={{ animationDelay: '0.4s' }}>●</span>
-          </div>
-        )}
-        {/* Invisible div to scroll down to */}
-        <div ref={messagesEndRef} />
-      </div>
-
-      {/* Input Area */}
-      <div className="p-4 border-t bg-white flex gap-2">
-        <input 
-          type="text" 
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
-          placeholder="e.g. Find artists under ₹30k..."
-          className="flex-1 border rounded-full px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 bg-gray-50"
-        />
+      {!isOpen && (
         <button 
-          onClick={sendMessage}
-          disabled={isLoading || !input.trim()}
-          className="bg-rose-600 text-white px-5 py-2 rounded-full text-sm font-bold hover:bg-rose-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="fixed bottom-8 right-8 z-40 w-16 h-16 rounded-full bg-[#8f3546] border-2 border-white shadow-2xl overflow-hidden hover:scale-105 transition-transform flex items-center justify-center p-3"
+          onClick={() => setIsOpen(true)}
         >
-          Send
+          {/* White icon on the dark red button */}
+          <MagicLampIcon className="w-8 h-8 text-white fill-white" />
         </button>
-      </div>
-      
-    </div>
+      )}
+    </>
   );
 }

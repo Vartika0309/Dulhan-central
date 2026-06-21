@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { vendors } from '../../../data/vendor_data';
+import { supabase } from '@/lib/supabase'; // <-- Import Supabase dynamically
 
 export async function POST(req: Request) {
   try {
@@ -12,16 +12,34 @@ export async function POST(req: Request) {
       });
     }
 
-    const simplifiedVendors = vendors.map(v => ({
+    // 1. Fetch Makeup Artists from Supabase
+    const { data: makeupVendors } = await supabase
+      .from('vendor')
+      .select('name, location, starting_price, services_offered');
+
+    // 2. Fetch Mehendi Artists from Supabase
+    const { data: mehendiVendors } = await supabase
+      .from('mehendi')
+      .select('name, location, starting_price, services_offered');
+
+    // 3. Combine them and label their categories for the AI
+    const combinedData = [
+      ...(makeupVendors || []).map(v => ({ category: 'Makeup Artist', ...v })),
+      ...(mehendiVendors || []).map(v => ({ category: 'Mehendi Artist', ...v }))
+    ];
+
+    const simplifiedVendors = combinedData.map(v => ({
+      category: v.category,
       name: v.name,
       location: v.location,
       price: v.starting_price,
-      services: v.services_offered.join(', ')
+      services: v.services_offered?.join(', ') || ''
     }));
 
     const systemPrompt = `
-    You are BeautyBot, an elite bridal concierge for 'Dulhan Central' in Delhi NCR.
+    You are BeautyBot (DC Genie), an elite bridal concierge for 'Dulhan Central' in Delhi NCR.
     A user is asking for advice. Use ONLY the following list of real vendors from our database to give them a specific, helpful recommendation.
+    Pay attention to whether they need Makeup or Mehendi. 
     Keep your answer friendly, relatively short (2-4 sentences max), and mention the vendor's starting price and location. Do not use bold formatting.
 
     OUR VENDOR DATABASE:
