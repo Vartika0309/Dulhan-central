@@ -13,15 +13,6 @@ export default function Footer() {
           <p className="text-sm text-pink-100 mb-6 max-w-xs leading-relaxed opacity-90">
             Curating India's finest bridal artists and luxury services for the modern bride.
           </p>
-          <div className="flex space-x-4 opacity-90">
-            {/* Using standard anchor tags for external social links */}
-            <a href="https://instagram.com" target="_blank" rel="noreferrer" className="hover:text-pink-200 hover:scale-110 transition-all">
-              <span className="material-symbols-outlined">photo_camera</span>
-            </a>
-            <a href="https://youtube.com" target="_blank" rel="noreferrer" className="hover:text-pink-200 hover:scale-110 transition-all">
-              <span className="material-symbols-outlined">play_circle</span>
-            </a>
-          </div>
         </div>
 
         <div>
@@ -29,7 +20,6 @@ export default function Footer() {
           <ul className="space-y-4">
             <li><Link href="/about" className="text-sm text-pink-50 hover:text-white hover:underline transition-colors">About Us</Link></li>
             <li><Link href="/register" className="text-sm text-pink-50 hover:text-white hover:underline transition-colors">Vendor Registration</Link></li>
-            <li><Link href="/careers" className="text-sm text-pink-50 hover:text-white hover:underline transition-colors">Careers</Link></li>
           </ul>
         </div>
         
@@ -38,7 +28,7 @@ export default function Footer() {
           <ul className="space-y-4">
             <li><Link href="/search" className="text-sm text-pink-50 hover:text-white hover:underline transition-colors">Bridal Makeup</Link></li>
             <li><Link href="/mehendi" className="text-sm text-pink-50 hover:text-white hover:underline transition-colors">Mehendi Artists</Link></li>
-            <li><Link href="/search" className="text-sm text-pink-50 hover:text-white hover:underline transition-colors">Inspiration Gallery</Link></li>
+            <li><Link href="/#inspiration-gallery" className="text-sm text-pink-50 hover:text-white hover:underline transition-colors">Inspiration Gallery</Link></li>
           </ul>
         </div>
         

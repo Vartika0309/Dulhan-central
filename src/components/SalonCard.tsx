@@ -23,7 +23,7 @@ export default function SalonCard({ vendor, mode }: { vendor: Vendor, mode: 'gri
           <img 
             src={vendor.image_url} 
             alt={vendor.name} 
-            loading="lazy"
+            // FIX: Added object-cover and size classes
             className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
             onError={(e) => { (e.target as HTMLImageElement).src = fallbackImage; }}
           />

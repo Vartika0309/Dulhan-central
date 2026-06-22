@@ -1,4 +1,4 @@
-/* eslint-disable @next/next/no-img-element */
+//eslint-disable @next/next/no-img-element
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -156,11 +156,14 @@ export default function VendorProfile() {
       const res = await fetch('/api/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ vendorId: vendor?.id, vendorName: vendor?.name, depositAmount: 5000 }),
+        // CORRECTED: Changed 'Amount' to 'amount' (lowercase 'a')
+        body: JSON.stringify({ vendorId: vendor?.id, vendorName: vendor?.name, amount: 5000 }),
       });
 
       const orderData = await res.json();
-      if (!res.ok || !orderData.orderId) throw new Error(orderData.error || 'Failed to create order');
+      console.log("BACKEND RESPONSE:", orderData);
+      
+      if (!res.ok || !orderData.id) throw new Error(orderData.error || 'Failed to create order');
 
       const options = {
         key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID, 
@@ -168,7 +171,7 @@ export default function VendorProfile() {
         currency: orderData.currency,
         name: 'Dulhan Central',
         description: `Securing Deposit for ${vendor?.name} on ${selectedDate}`,
-        order_id: orderData.orderId,
+        order_id: orderData.id,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         handler: function (response: any) {
           alert(`🎉 Payment Successful!\nDate Locked: ${selectedDate}\nPayment ID: ${response.razorpay_payment_id}`);
@@ -187,13 +190,14 @@ export default function VendorProfile() {
       paymentObject.open();
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
-      console.error('Checkout error:', err);
-      alert(err.message || 'An error occurred during checkout setup.');
+    } catch (error: any) {
+      console.error('Razorpay Order Error:', error);
+      const errorMessage = error?.error?.description || error?.message || 'Failed to create order';
+      alert(`Error: ${errorMessage}`);
     } finally {
       setIsCheckoutLoading(false);
     }
-  };
+  }
 
   const today = new Date().toISOString().split('T')[0];
 
@@ -235,11 +239,11 @@ export default function VendorProfile() {
         </nav>
 
         {/* Hero Image */}
-        <div className="relative h-64 md:h-96 w-full rounded-2xl overflow-hidden bg-gray-200 shadow-sm">
+        <div className="relative h-64 md:h-150 w-full rounded-2xl overflow-hidden bg-gray-200 shadow-sm">
           <img 
             src={vendor.image_url} 
             alt={vendor.name} 
-            className="w-full h-full object-cover"
+            className="w-full h-full object-cover object-top"
             onError={(e) => { (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1512496015851-a1fb82e75bc7?w=500&q=80'; }}
           />
         </div>

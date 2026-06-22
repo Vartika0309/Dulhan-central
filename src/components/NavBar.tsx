@@ -6,9 +6,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 
 export default function Navbar() {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [user, setUser] = useState<any>(null);
-  
   const pathname = usePathname();
   const router = useRouter();
 
@@ -29,44 +27,44 @@ export default function Navbar() {
     router.push('/');
   };
 
-  // Helper function: Increased font size to text-sm (approx 14px) and adjusted padding
-  const getNavLinkClass = (path: string) => {
-    const isActive = pathname === path;
-    return `text-sm uppercase tracking-wider cursor-pointer transition-colors pb-1 ${
-      isActive 
-        ? 'text-[#8f3546] font-bold border-b-2 border-[#8f3546]' 
-        : 'text-gray-600 hover:text-[#8f3546] font-medium'
-    }`;
-  };
+  // 1. Determine the correct link and text based on the user's role
+  const isVendor = user?.user_metadata?.role === 'vendor';
+  const profileRoute = isVendor ? '/dashboard/vendor' : '/profile';
+  const profileText = isVendor ? 'Dashboard' : 'Profile';
 
   return (
-    <header className="bg-white border-b border-gray-100 flex justify-between items-center w-full px-6 md:px-16 py-4 fixed top-0 z-50 shadow-sm font-sans-custom">
-      <Link href="/" className="font-display-custom text-2xl md:text-[32px] font-bold text-[#8f3546] tracking-tighter hover:opacity-80 transition-opacity">
-        DULHAN CENTRAL
-      </Link>
+    <header className="bg-white border-b border-gray-100 grid grid-cols-3 items-center w-full px-6 md:px-16 py-4 fixed top-0 z-50 shadow-sm font-sans-custom">
       
-        <nav className="hidden md:flex gap-8 items-center">
-          <Link href="/">
-            <span className="text-gray-500 hover:text-[#8f3546] transition-colors text-[15px] uppercase tracking-widest cursor-pointer">Home</span>
-          </Link>
-          <Link href="/search">
-            <span className="text-gray-500 hover:text-[#8f3546] transition-colors text-[15px] uppercase tracking-widest cursor-pointer">Makeup</span>
-          </Link>
-          <Link href="/mehendi">
-            <span className="text-gray-500 hover:text-[#8f3546] transition-colors text-[15px] uppercase tracking-widest cursor-pointer">Mehendi</span>
-          </Link>
-        </nav>
+      {/* Col 1: Logo (Left) */}
+      <div className="justify-self-start">
+        <Link href="/" className="font-display-custom text-2xl md:text-[32px] font-bold text-[#8f3546] tracking-tighter hover:opacity-80 transition-opacity">
+          DULHAN CENTRAL
+        </Link>
+      </div>
+      
+      {/* Col 2: Navigation Links (Center) */}
+      <nav className="hidden md:flex gap-8 justify-self-center">
+        <Link href="/">
+          <span className={`text-[15px] uppercase tracking-widest cursor-pointer transition-colors ${pathname === '/' ? 'text-[#8f3546] font-bold' : 'text-gray-500 hover:text-[#8f3546]'}`}>Home</span>
+        </Link>
+        <Link href="/search">
+          <span className={`text-[15px] uppercase tracking-widest cursor-pointer transition-colors ${pathname === '/search' ? 'text-[#8f3546] font-bold' : 'text-gray-500 hover:text-[#8f3546]'}`}>Makeup</span>
+        </Link>
+        <Link href="/mehendi">
+          <span className={`text-[15px] uppercase tracking-widest cursor-pointer transition-colors ${pathname === '/mehendi' ? 'text-[#8f3546] font-bold' : 'text-gray-500 hover:text-[#8f3546]'}`}>Mehendi</span>
+        </Link>
+      </nav>
 
-      
-      <div className="flex items-center gap-4 md:gap-6">
+      {/* Col 3: Actions (Right) */}
+      <div className="flex items-center gap-3 justify-self-end">
         {user ? (
           <>
-            <Link href="/profile" className={getNavLinkClass('/profile')}>
-              My Profile
+            {/* 2. Use the dynamic route and text here */}
+            <Link href={profileRoute} className="text-sm uppercase tracking-wider text-gray-600 hover:text-[#8f3546] font-medium">
+              {profileText}
             </Link>
             <button 
               onClick={handleLogout} 
-              // Increased button text to text-sm and adjusted padding
               className="text-sm uppercase tracking-wider text-white bg-gray-800 px-5 py-2.5 hover:bg-black transition-colors font-semibold shadow-sm rounded-lg"
             >
               Log Out
@@ -74,12 +72,11 @@ export default function Navbar() {
           </>
         ) : (
           <>
-            <Link 
-              href="/login" 
-              // Increased button text to text-sm and adjusted padding
-              className="text-sm uppercase tracking-wider text-white bg-[#8f3546] px-6 py-2.5 hover:bg-[#712030] transition-colors font-semibold shadow-sm rounded-lg"
-            >
-              User Login
+            <Link href="/login" className="text-sm uppercase tracking-wider text-[#8f3546] border border-[#8f3546] px-6 py-2.5 hover:bg-[#fff8f7] transition-colors font-semibold rounded-lg">
+              Login
+            </Link>
+            <Link href="/register" className="text-sm uppercase tracking-wider text-white bg-[#8f3546] px-6 py-2.5 hover:bg-[#712030] transition-colors font-semibold shadow-sm rounded-lg">
+              Register
             </Link>
           </>
         )}

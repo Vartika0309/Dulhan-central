@@ -22,6 +22,13 @@ export interface Vendor {
 export default function HomePage() {
   const router = useRouter();
   const [spotlightVendors, setSpotlightVendors] = useState<Vendor[]>([]);
+  
+  // Search state management
+  const [searchService, setSearchService] = useState('');
+  const [searchLocation, setSearchLocation] = useState('');
+
+  // Inspiration Gallery view state
+  const [showAllInspiration, setShowAllInspiration] = useState(false);
 
   useEffect(() => {
     async function fetchSpotlights() {
@@ -43,7 +50,19 @@ export default function HomePage() {
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    router.push('/search');
+    const params = new URLSearchParams();
+    if (searchService) params.append('service', searchService);
+    if (searchLocation) params.append('location', searchLocation);
+    
+    router.push(`/search?${params.toString()}`);
+  };
+
+  const handleSpotlightScroll = (direction: 'left' | 'right') => {
+    const container = document.getElementById('spotlight-container');
+    if (container) {
+      const scrollAmount = direction === 'left' ? -300 : 300;
+      container.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+    }
   };
 
   return (
@@ -91,11 +110,24 @@ export default function HomePage() {
             <form onSubmit={handleSearch} className="w-full max-w-lg bg-surface/95 backdrop-blur-sm p-2 flex flex-col sm:flex-row gap-2 border border-outline-variant/30 rounded-sm shadow-xl">
               <div className="flex-1 flex items-center border-b sm:border-b-0 sm:border-r border-outline-variant/50 px-3 py-2">
                 <span className="material-symbols-outlined text-on-surface-variant mr-2">brush</span>
-                <input required className="w-full bg-transparent border-none focus:ring-0 text-on-surface placeholder:text-on-surface-variant p-0 outline-none" placeholder="Service (e.g. Bridal Makeup)" type="text"/>
+                <input 
+                  value={searchService}
+                  onChange={(e) => setSearchService(e.target.value)}
+                  required 
+                  className="w-full bg-transparent border-none focus:ring-0 text-on-surface placeholder:text-on-surface-variant p-0 outline-none" 
+                  placeholder="Service (e.g. Bridal Makeup)" 
+                  type="text"
+                />
               </div>
               <div className="flex-1 flex items-center px-3 py-2">
                 <span className="material-symbols-outlined text-on-surface-variant mr-2">location_on</span>
-                <input className="w-full bg-transparent border-none focus:ring-0 text-on-surface placeholder:text-on-surface-variant p-0 outline-none" placeholder="Delhi NCR" type="text"/>
+                <input 
+                  value={searchLocation}
+                  onChange={(e) => setSearchLocation(e.target.value)}
+                  className="w-full bg-transparent border-none focus:ring-0 text-on-surface placeholder:text-on-surface-variant p-0 outline-none" 
+                  placeholder="Delhi NCR" 
+                  type="text"
+                />
               </div>
               <button type="submit" className="bg-primary text-on-primary px-8 py-3 text-xs font-bold uppercase tracking-wider hover:bg-surface-tint transition-colors flex items-center justify-center sm:w-auto w-full mt-2 sm:mt-0">
                 Search
@@ -104,59 +136,123 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* Categories Grid */}
+        {/* Bridal Services - Curated to Makeup and Mehendi */}
         <section className="py-20 md:py-24 px-6 md:px-20 bg-background">
           <div className="text-center mb-12 md:mb-16">
             <h2 className="font-display-custom text-3xl md:text-[40px] font-semibold text-primary uppercase tracking-widest">Bridal Services</h2>
             <div className="w-12 h-0.5 bg-primary mx-auto mt-6"></div>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <Link href="/search" className="group relative aspect-[4/5] overflow-hidden bg-surface-container-high block">
-              <img alt="Bridal makeup" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAQS-PNQSSvx6nwW5f4GLfVtQGbbX2nphWaYZw2c2TDJnJONlOejqBrDTD2xrTUQInuMy_m81510j_ZW6vxvFVAdaV1UPJu3POTZwvSK-pLzenTFriHxCtP1HBDFTBTiyvGM-sp456ZHmUHL6h5mdDrU0nuwQLm28TBvs26bHOMNwmUSthy85Els3n75Dl_32HW5WE1EaTtfNAWbwJAis8STRjeENxQfpVbUibgBO5gv0IW6UIjoaZYPxuZzbANwMEvKeemoPf7Q3w8"/>
-              <div className="absolute inset-0 editorial-overlay flex flex-col justify-end p-6 md:p-8">
-                <h3 className="font-display-custom text-2xl text-on-primary mb-2">Makeup Artistry</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-5xl mx-auto">
+            <Link href="/search?service=Makeup" className="group relative aspect-[4/5] md:aspect-square overflow-hidden bg-surface-container-high block rounded-sm shadow-sm hover:shadow-xl transition-shadow">
+              <img alt="Bridal makeup" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" src="https://images.unsplash.com/photo-1594140700520-8afea3283e2c?q=80&w=687&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"/>
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex flex-col justify-end p-8 md:p-10">
+                <h3 className="font-display-custom text-3xl text-white mb-2">Makeup</h3>
                 <span className="text-xs font-bold text-primary-container uppercase tracking-wider flex items-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 transform translate-y-2 group-hover:translate-y-0">
                   Explore Artists <span className="material-symbols-outlined ml-2 text-sm">arrow_forward</span>
                 </span>
               </div>
             </Link>
 
-            <Link href="/search" className="group relative aspect-[4/5] overflow-hidden bg-surface-container-high block md:mt-8">
-              <img alt="Bridal Mehendi" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" src="https://images.unsplash.com/photo-1598463878148-5221b068da6c?w=500&q=80"/>
-              <div className="absolute inset-0 editorial-overlay flex flex-col justify-end p-6 md:p-8">
-                <h3 className="font-display-custom text-2xl text-on-primary mb-2">Mehendi Design</h3>
+            <Link href="/search?service=Mehendi" className="group relative aspect-[4/5] md:aspect-square overflow-hidden bg-surface-container-high block rounded-sm shadow-sm hover:shadow-xl transition-shadow">
+              <img alt="Bridal Mehendi" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" src="https://images.unsplash.com/photo-1613665667184-81bb9b8605e2?q=80&w=687&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"/>
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex flex-col justify-end p-8 md:p-10">
+                <h3 className="font-display-custom text-3xl text-white mb-2">Mehendi</h3>
                 <span className="text-xs font-bold text-primary-container uppercase tracking-wider flex items-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 transform translate-y-2 group-hover:translate-y-0">
                   Find Experts <span className="material-symbols-outlined ml-2 text-sm">arrow_forward</span>
                 </span>
               </div>
             </Link>
+          </div>
+        </section>
 
-            <Link href="/search" className="group relative aspect-[4/5] overflow-hidden bg-surface-container-high block">
-              <img alt="Bridal Couture" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" src="https://images.unsplash.com/photo-1583391733958-d25e07fac04f?w=500&q=80"/>
-              <div className="absolute inset-0 editorial-overlay flex flex-col justify-end p-6 md:p-8">
-                <h3 className="font-display-custom text-2xl text-on-primary mb-2">Bridal Couture</h3>
-                <span className="text-xs font-bold text-primary-container uppercase tracking-wider flex items-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 transform translate-y-2 group-hover:translate-y-0">
-                  Shop Boutiques <span className="material-symbols-outlined ml-2 text-sm">arrow_forward</span>
-                </span>
-              </div>
-            </Link>
-
-            <Link href="/search" className="group relative aspect-[4/5] overflow-hidden bg-surface-container-high block md:mt-8">
-              <img alt="Fine Jewelry" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBaUueq6qwKUKraDAgIi5NpqJF3FASC5y28lpNejK6Fw2Li1Qw8fTwjk6HpH4Eo2KD7oQZ7guyMAlFxPuQb6yCP7bOOIO9EeFz0Hz6zWIzjtoNzTp2tRhih8WBuFQfbIGTSPcTdAlww4vxrzzKKUZOG-KDFr87YU15OE4OjOjX-tJdp-sjDGsobv-EDlcdBAJQidAJ2hvxcUMx7AqoVYUOd68K23zH7qsCtZ3Nxf0_5b0irTM6C4aQqhdjx9rS_c6JTjkXkiMJ2Bw5W"/>
-              <div className="absolute inset-0 editorial-overlay flex flex-col justify-end p-6 md:p-8">
-                <h3 className="font-display-custom text-2xl text-on-primary mb-2">Fine Jewelry</h3>
-                <span className="text-xs font-bold text-primary-container uppercase tracking-wider flex items-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 transform translate-y-2 group-hover:translate-y-0">
-                  View Collections <span className="material-symbols-outlined ml-2 text-sm">arrow_forward</span>
-                </span>
-              </div>
-            </Link>
+        {/* Inspiration Gallery */}
+        <section id="inspiration-gallery" className="py-20 md:py-24 px-6 md:px-20 bg-[#faf8f7]">          <div className="text-center mb-12 md:mb-16">
+            <h2 className="font-display-custom text-3xl md:text-[40px] font-semibold text-primary uppercase tracking-widest">Inspiration Gallery</h2>
+            <div className="w-12 h-0.5 bg-primary mx-auto mt-6"></div>
           </div>
 
-          <div className="text-center mt-12 md:mt-16">
-            <Link href="/search" className="inline-flex items-center px-8 py-3 border border-primary text-primary text-xs font-bold uppercase tracking-wider hover:bg-primary hover:text-on-primary transition-colors">
-              View All Categories
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl mx-auto">
+            {/* Makeup Card */}
+            <Link href="/inspiration/makeup" className="group relative aspect-[4/5] overflow-hidden bg-white block rounded-sm shadow-sm hover:shadow-xl transition-all duration-300">
+              <img alt="Makeup Inspiration" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" src="https://images.unsplash.com/photo-1487412947147-5cebf100ffc2?q=80&w=1171&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"/>
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex flex-col justify-end p-6">
+                <h3 className="font-display-custom text-2xl text-white mb-1">Makeup</h3>
+                <span className="text-xs font-bold text-primary-container uppercase tracking-wider flex items-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 transform translate-y-2 group-hover:translate-y-0">
+                  View Moodboard <span className="material-symbols-outlined ml-2 text-sm">arrow_forward</span>
+                </span>
+              </div>
             </Link>
+
+            {/* Hairstyle Card */}
+            <Link href="/inspiration/hairstyles" className="group relative aspect-[4/5] overflow-hidden bg-white block rounded-sm shadow-sm hover:shadow-xl transition-all duration-300">
+              <img alt="Hairstyle Inspiration" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" src="https://images.unsplash.com/photo-1746649236126-96c903680c0d?q=80&w=687&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"/>
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex flex-col justify-end p-6">
+                <h3 className="font-display-custom text-2xl text-white mb-1">Hairstyle</h3>
+                <span className="text-xs font-bold text-primary-container uppercase tracking-wider flex items-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 transform translate-y-2 group-hover:translate-y-0">
+                  View Moodboard <span className="material-symbols-outlined ml-2 text-sm">arrow_forward</span>
+                </span>
+              </div>
+            </Link>
+
+            {/* Mehendi Card */}
+            <Link href="/inspiration/mehendi" className="group relative aspect-[4/5] overflow-hidden bg-white block rounded-sm shadow-sm hover:shadow-xl transition-all duration-300">
+              <img alt="Mehendi Inspiration" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" src="https://images.unsplash.com/photo-1730003873829-09b4b16444c1?q=80&w=1170&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"/>
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex flex-col justify-end p-6">
+                <h3 className="font-display-custom text-2xl text-white mb-1">Mehendi</h3>
+                <span className="text-xs font-bold text-primary-container uppercase tracking-wider flex items-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 transform translate-y-2 group-hover:translate-y-0">
+                  View Moodboard <span className="material-symbols-outlined ml-2 text-sm">arrow_forward</span>
+                </span>
+              </div>
+            </Link>
+
+            {/* Jewellery Card */}
+            <Link href="/inspiration/jwellery" className="group relative aspect-[4/5] overflow-hidden bg-white block rounded-sm shadow-sm hover:shadow-xl transition-all duration-300">
+              <img alt="Jewellery Inspiration" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBaUueq6qwKUKraDAgIi5NpqJF3FASC5y28lpNejK6Fw2Li1Qw8fTwjk6HpH4Eo2KD7oQZ7guyMAlFxPuQb6yCP7bOOIO9EeFz0Hz6zWIzjtoNzTp2tRhih8WBuFQfbIGTSPcTdAlww4vxrzzKKUZOG-KDFr87YU15OE4OjOjX-tJdp-sjDGsobv-EDlcdBAJQidAJ2hvxcUMx7AqoVYUOd68K23zH7qsCtZ3Nxf0_5b0irTM6C4aQqhdjx9rS_c6JTjkXkiMJ2Bw5W"/>
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex flex-col justify-end p-6">
+                <h3 className="font-display-custom text-2xl text-white mb-1">Jewellery</h3>
+                <span className="text-xs font-bold text-primary-container uppercase tracking-wider flex items-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 transform translate-y-2 group-hover:translate-y-0">
+                  View Moodboard <span className="material-symbols-outlined ml-2 text-sm">arrow_forward</span>
+                </span>
+              </div>
+            </Link>
+
+            {/* Hidden Leftover Cards (Revealed when showAllInspiration is true) */}
+            {showAllInspiration && (
+              <>
+                {/* Lehenga Card */}
+                <Link href="/inspiration/lehenga" className="group relative aspect-[4/5] overflow-hidden bg-white block rounded-sm shadow-sm hover:shadow-xl transition-all duration-300 animate-fade-in">
+                  <img alt="Lehenga Inspiration" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" src="https://images.unsplash.com/photo-1735052713120-2323c8ac72e9?q=80&w=687&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"/>
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex flex-col justify-end p-6">
+                    <h3 className="font-display-custom text-2xl text-white mb-1">Lehenga</h3>
+                    <span className="text-xs font-bold text-primary-container uppercase tracking-wider flex items-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 transform translate-y-2 group-hover:translate-y-0">
+                      View Moodboard <span className="material-symbols-outlined ml-2 text-sm">arrow_forward</span>
+                    </span>
+                  </div>
+                </Link>
+
+                {/* Decorations Card */}
+                <Link href="/inspiration/decorations" className="group relative aspect-[4/5] overflow-hidden bg-white block rounded-sm shadow-sm hover:shadow-xl transition-all duration-300 animate-fade-in">
+                  <img alt="Decorations Inspiration" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" src="https://images.unsplash.com/photo-1519225421980-715cb0215aed?w=500&q=80"/>
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex flex-col justify-end p-6">
+                    <h3 className="font-display-custom text-2xl text-white mb-1">Decorations</h3>
+                    <span className="text-xs font-bold text-primary-container uppercase tracking-wider flex items-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 transform translate-y-2 group-hover:translate-y-0">
+                      View Moodboard <span className="material-symbols-outlined ml-2 text-sm">arrow_forward</span>
+                    </span>
+                  </div>
+                </Link>
+              </>
+            )}
+          </div>
+
+          {/* Toggle Button */}
+          <div className="text-center mt-12 md:mt-16">
+            <button 
+              onClick={() => setShowAllInspiration(!showAllInspiration)}
+              className="inline-flex items-center px-8 py-3 border border-primary text-primary text-xs font-bold uppercase tracking-wider hover:bg-primary hover:text-on-primary transition-colors cursor-pointer"
+            >
+              {showAllInspiration ? 'Show Less Categories' : 'View All Categories'}
+            </button>
           </div>
         </section>
 
@@ -168,16 +264,16 @@ export default function HomePage() {
               <p className="font-sans-custom text-gray-500">The most highly rated vendors this season.</p>
             </div>
             <div className="hidden md:flex space-x-4">
-              <button className="w-12 h-12 border border-gray-300 rounded-full flex items-center justify-center hover:bg-white hover:text-[#8f3546] transition-colors text-gray-500 bg-transparent">
+              <button onClick={() => handleSpotlightScroll('left')} className="w-12 h-12 border border-gray-300 rounded-full flex items-center justify-center hover:bg-white hover:text-[#8f3546] transition-colors text-gray-500 bg-transparent">
                 <span className="material-symbols-outlined">arrow_back</span>
               </button>
-              <button className="w-12 h-12 border border-[#8f3546] bg-[#8f3546] text-white rounded-full flex items-center justify-center hover:bg-[#712030] transition-colors">
+              <button onClick={() => handleSpotlightScroll('right')} className="w-12 h-12 border border-[#8f3546] bg-[#8f3546] text-white rounded-full flex items-center justify-center hover:bg-[#712030] transition-colors">
                 <span className="material-symbols-outlined">arrow_forward</span>
               </button>
             </div>
           </div>
 
-          <div className="flex overflow-x-auto md:grid md:grid-cols-3 gap-6 pb-8 md:pb-0 hide-scrollbar -mx-6 px-6 md:mx-0 md:px-0">
+          <div id="spotlight-container" className="flex overflow-x-auto md:grid md:grid-cols-3 gap-6 pb-8 md:pb-0 hide-scrollbar -mx-6 px-6 md:mx-0 md:px-0">
             {spotlightVendors.map((vendor) => (
               <div 
                 key={vendor.id} 
@@ -198,7 +294,7 @@ export default function HomePage() {
                   )}
                   <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-4 opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-2 group-hover:translate-y-0">
                     <button className="w-full py-2.5 bg-[#8f3546] hover:bg-[#712030] text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-colors">
-                      View Portfolio &rarr;
+                      View Portfolio →
                     </button>
                   </div>
                 </div>
@@ -242,9 +338,12 @@ export default function HomePage() {
             <p className="font-sans-custom text-lg text-surface-bright mb-10 max-w-2xl mx-auto">
               Subscribe to our editorial newsletter for exclusive bridal trends, artist interviews, and early access to luxury vendor bookings.
             </p>
-            <form className="flex flex-col sm:flex-row max-w-md mx-auto border-b border-surface-bright focus-within:border-primary-container transition-colors">
+            <form 
+              onSubmit={(e) => { e.preventDefault(); alert('Subscribed successfully!'); }} 
+              className="flex flex-col sm:flex-row max-w-md mx-auto border-b border-surface-bright focus-within:border-primary-container transition-colors"
+            >
               <input required className="flex-1 bg-transparent border-none text-center sm:text-left focus:ring-0 text-on-primary placeholder:text-surface-bright py-3 px-0 text-xs font-bold tracking-wider outline-none" placeholder="YOUR EMAIL ADDRESS" type="email"/>
-              <button className="py-3 px-4 text-xs font-bold uppercase tracking-widest text-primary-container hover:text-on-primary transition-colors flex items-center justify-center" type="button">
+              <button className="py-3 px-4 text-xs font-bold uppercase tracking-widest text-primary-container hover:text-on-primary transition-colors flex items-center justify-center" type="submit">
                 Subscribe <span className="material-symbols-outlined ml-2">arrow_right_alt</span>
               </button>
             </form>
