@@ -106,6 +106,12 @@ export default function VendorDashboard() {
     });
   };
 
+  // --- DYNAMIC MATH CALCULATION ---
+  const totalReviews = reviews.length;
+  const averageRating = totalReviews > 0 
+    ? (reviews.reduce((sum, review) => sum + review.rating, 0) / totalReviews).toFixed(1)
+    : '0.0';
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#fff8f7]">
@@ -134,7 +140,7 @@ export default function VendorDashboard() {
           </div>
         ) : (
           <>
-            {/* 1. Profile Header Section (Combined) */}
+            {/* 1. Profile Header Section */}
             <div className="flex flex-col md:flex-row items-center gap-6 mb-10 bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
               
               {/* Profile Image */}
@@ -183,7 +189,7 @@ export default function VendorDashboard() {
               </div>
             </div>
 
-            {/* 2. STATS BLOCK */}
+            {/* 2. STATS BLOCK (Updated with Dynamic Math) */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
               <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between">
                 <div className="flex justify-between items-start mb-4">
@@ -192,7 +198,7 @@ export default function VendorDashboard() {
                   </div>
                 </div>
                 <div>
-                  <h3 className="text-3xl font-bold text-gray-900 mb-1">{profile.rating || '0.0'}</h3>
+                  <h3 className="text-3xl font-bold text-gray-900 mb-1">{averageRating}</h3>
                   <p className="text-sm font-semibold text-gray-700">Average Rating</p>
                   <p className="text-xs text-gray-400 mt-1">Across all bookings</p>
                 </div>
@@ -205,7 +211,7 @@ export default function VendorDashboard() {
                   </div>
                 </div>
                 <div>
-                  <h3 className="text-3xl font-bold text-gray-900 mb-1">{profile.reviews || 0}</h3>
+                  <h3 className="text-3xl font-bold text-gray-900 mb-1">{totalReviews}</h3>
                   <p className="text-sm font-semibold text-gray-700">Total Reviews</p>
                   <p className="text-xs text-gray-400 mt-1">Lifetime feedback</p>
                 </div>

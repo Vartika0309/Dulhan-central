@@ -8,6 +8,7 @@ import Navbar from '@/components/NavBar';
 
 export interface Vendor {
   id: string;
+  user_id: string;
   name: string;
   location: string;
   coordinates: { lat: number; lng: number };
@@ -18,19 +19,18 @@ export interface Vendor {
   services_offered: string[];
   image_url: string;
   featured: boolean;
+  portfolio_images?: string[];
 }
 
-// Initial dummy reviews to populate the state
-const initialReviews = [
-  {
-    id: 1, author: "Sneha Sharma", initial: "S", date: "Nov 12, 2025", rating: 5, 
-    text: "I booked them for my main wedding day and my reception, and it was the best decision! They understood exactly what I meant by 'minimal but glowing.' My makeup didn't budge even after hours of dancing and crying. Highly recommend!"
-  },
-  {
-    id: 2, author: "Ananya Verma", initial: "A", date: "Oct 28, 2025", rating: 4, 
-    text: "Very professional and punctual. The team arrived right on time despite the Delhi traffic. The draping was secure and the eye makeup was stunning. Took off one star only because the trial session felt a bit rushed, but the final day was perfect."
-  }
-];
+export interface ReviewData {
+  id: number;
+  client_name: string;
+  rating: number;
+  review_text: string;
+  liked?: string;
+  disliked?: string;
+  created_at: string;
+}
 
 export default function VendorProfile() {
   const params = useParams();
@@ -38,6 +38,7 @@ export default function VendorProfile() {
   const id = params.id as string;
 
   const [vendor, setVendor] = useState<Vendor | null>(null);
+  const [isMehendiService, setIsMehendiService] = useState(false);
   const [loading, setLoading] = useState(true);
   const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
   const [showPhone, setShowPhone] = useState(false);
@@ -45,27 +46,58 @@ export default function VendorProfile() {
   
   // States
   const [selectedDate, setSelectedDate] = useState('');
-  const [isSaved, setIsSaved] = useState(false); // Save Vendor State
+  const [isSaved, setIsSaved] = useState(false); 
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   
   // Review States
-  const [reviewsList, setReviewsList] = useState(initialReviews);
+  const [reviewsList, setReviewsList] = useState<ReviewData[]>([]);
   const [showReviewForm, setShowReviewForm] = useState(false);
   const [newRating, setNewRating] = useState(5);
   const [newReviewText, setNewReviewText] = useState('');
+  const [newLiked, setNewLiked] = useState('');
+  const [newDisliked, setNewDisliked] = useState('');
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
 
-  // Fetch specific vendor data from Supabase
+  // Format dates securely
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-GB', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric'
+    });
+  };
+
+  // Fetch logged-in user & specific vendor data
   useEffect(() => {
-    async function fetchVendorDetails() {
+    async function fetchData() {
       try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) setCurrentUserId(user.id);
+
+        let isMehendi = false;
         let { data, error } = await supabase.from('vendor').select('*').eq('id', id).single();
 
         if (error || !data) {
           const mehendiResponse = await supabase.from('mehendi').select('*').eq('id', id).single();
           data = mehendiResponse.data;
+          isMehendi = true;
           if (mehendiResponse.error) throw mehendiResponse.error;
         }
 
         setVendor(data as Vendor);
+        setIsMehendiService(isMehendi);
+
+        const idColumn = isMehendi ? 'mehendi_id' : 'vendor_id';
+        const { data: reviewsData } = await supabase
+          .from('reviews')
+          .select('*')
+          .eq(idColumn, id)
+          .order('created_at', { ascending: false });
+
+        if (reviewsData) {
+          setReviewsList(reviewsData);
+        }
+
       } catch (error) {
         console.error('Error fetching artist profile:', error);
       } finally {
@@ -73,23 +105,54 @@ export default function VendorProfile() {
       }
     }
 
-    if (id) fetchVendorDetails();
+    if (id) fetchData();
   }, [id]);
 
-  // Handle Save Vendor Toggle
+  const isOwner = currentUserId !== null && currentUserId === vendor?.user_id;
+  
+  // --- UPDATED SAVE HANDLER ---
   const handleSaveToggle = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
+    if (!currentUserId) {
       alert("Please log in to save your favorite artists.");
       router.push('/login');
       return;
     }
-    setIsSaved(!isSaved);
-    // Note: In the future, this is where you'd write an INSERT to a 'saved_vendors' table in Supabase
+
+    // Determine if we are saving a makeup or mehendi artist
+    const idColumn = isMehendiService ? 'mehendi_id' : 'vendor_id';
+
+    try {
+      if (isSaved) {
+        // If already saved, remove it from the database
+        await supabase
+          .from('saved_vendors')
+          .delete()
+          .eq('user_id', currentUserId)
+          .eq(idColumn, id);
+        setIsSaved(false);
+      } else {
+        // If not saved, insert it into the database
+        await supabase
+          .from('saved_vendors')
+          .insert([{
+            user_id: currentUserId,
+            [idColumn]: id
+          }]);
+        setIsSaved(true);
+      }
+    } catch (error) {
+      console.error("Error toggling save:", error);
+      alert("Could not save vendor. Please try again.");
+    }
   };
 
   // Handle Review Submission
   const handleSubmitReview = async () => {
+    if (isOwner) {
+      alert("You cannot review your own profile.");
+      return;
+    }
+
     if (!newReviewText.trim()) {
       alert("Please write something about your experience.");
       return;
@@ -102,31 +165,51 @@ export default function VendorProfile() {
       return;
     }
 
-    const userName = session.user.email?.split('@')[0] || 'Verified Bride';
+    setIsSubmittingReview(true);
+    const userName = session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'Verified Bride';
     
-    const newReview = {
-      id: Date.now(),
-      author: userName,
-      initial: userName.charAt(0).toUpperCase(),
-      date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+    const payload = {
+      client_name: userName,
       rating: newRating,
-      text: newReviewText
+      review_text: newReviewText,
+      liked: newLiked.trim() || null,
+      disliked: newDisliked.trim() || null,
+      ...(isMehendiService ? { mehendi_id: id } : { vendor_id: id })
     };
 
-    // Add to the top of our local state list
-    setReviewsList([newReview, ...reviewsList]);
-    
-    // Reset form
-    setNewReviewText('');
-    setNewRating(5);
-    setShowReviewForm(false);
-    
-    alert("Thank you! Your review has been published.");
-    // Note: In the future, this is where you'd write an INSERT to a 'reviews' table in Supabase
+    try {
+      const { data: insertedReview, error } = await supabase
+        .from('reviews')
+        .insert([payload])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setReviewsList([insertedReview, ...reviewsList]);
+      
+      setNewReviewText('');
+      setNewLiked('');
+      setNewDisliked('');
+      setNewRating(5);
+      setShowReviewForm(false);
+      alert("Thank you! Your review has been published.");
+
+    } catch (error) {
+      console.error("Error submitting review:", error);
+      alert("There was an error submitting your review. Please try again.");
+    } finally {
+      setIsSubmittingReview(false);
+    }
   };
 
-  // --- RAZORPAY CHECKOUT HANDLER ---
+  // --- UPDATED RAZORPAY CHECKOUT HANDLER ---
   const handleCheckout = async () => {
+    if (isOwner) {
+      alert("You cannot book your own services.");
+      return;
+    }
+
     if (!selectedDate) {
       alert("Please select your event date from the calendar before booking.");
       return;
@@ -156,12 +239,10 @@ export default function VendorProfile() {
       const res = await fetch('/api/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        // CORRECTED: Changed 'Amount' to 'amount' (lowercase 'a')
         body: JSON.stringify({ vendorId: vendor?.id, vendorName: vendor?.name, amount: 5000 }),
       });
 
       const orderData = await res.json();
-      console.log("BACKEND RESPONSE:", orderData);
       
       if (!res.ok || !orderData.id) throw new Error(orderData.error || 'Failed to create order');
 
@@ -172,10 +253,33 @@ export default function VendorProfile() {
         name: 'Dulhan Central',
         description: `Securing Deposit for ${vendor?.name} on ${selectedDate}`,
         order_id: orderData.id,
+        // The updated handler that saves to Supabase
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        handler: function (response: any) {
-          alert(`🎉 Payment Successful!\nDate Locked: ${selectedDate}\nPayment ID: ${response.razorpay_payment_id}`);
-          router.push('/profile');
+        handler: async function (response: any) {
+          try {
+            const bookingPayload = {
+              user_id: session.user.id,
+              vendor_name: vendor?.name,
+              event_date: selectedDate,
+              amount: 5000,
+              payment_id: response.razorpay_payment_id,
+              status: 'confirmed',
+              ...(isMehendiService ? { mehendi_id: vendor?.id } : { vendor_id: vendor?.id })
+            };
+
+            const { error: bookingError } = await supabase
+              .from('bookings')
+              .insert([bookingPayload]);
+
+            if (bookingError) throw bookingError;
+
+            alert(`🎉 Booking Confirmed!\nYour date (${selectedDate}) is locked in.\nPayment ID: ${response.razorpay_payment_id}`);
+            router.push('/profile');
+            
+          } catch (err) {
+            console.error("Error saving booking:", err);
+            alert("Payment succeeded, but there was an error updating your profile. Please contact support.");
+          }
         },
         prefill: {
           name: session.user.email?.split('@')[0] || 'Bridal Client',
@@ -213,6 +317,11 @@ export default function VendorProfile() {
   }
 
   if (!vendor) return <div className="min-h-screen flex flex-col items-center justify-center">Artist Not Found</div>;
+
+  const totalReviews = reviewsList.length;
+  const averageRating = totalReviews > 0 
+    ? (reviewsList.reduce((sum, r) => sum + r.rating, 0) / totalReviews).toFixed(1)
+    : '0.0';
 
   return (
     <div className="bg-[#fff8f7] text-[#22191a] font-sans-custom min-h-screen pb-20">
@@ -264,22 +373,23 @@ export default function VendorProfile() {
           </div>
 
           <div className="flex flex-wrap items-center gap-4">
-            {/* SAVE VENDOR BUTTON */}
-            <button 
-              onClick={handleSaveToggle}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border text-sm font-bold transition-all shadow-sm ${isSaved ? 'bg-[#fff8f7] border-[#8f3546] text-[#8f3546]' : 'bg-white border-gray-200 text-gray-700 hover:border-gray-300'}`}
-            >
-              <span className={`material-symbols-outlined text-lg ${isSaved ? 'icon-fill text-[#8f3546]' : 'text-gray-400'}`}>favorite</span>
-              {isSaved ? 'Saved to Favorites' : 'Save Vendor'}
-            </button>
+            {!isOwner && (
+              <button 
+                onClick={handleSaveToggle}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border text-sm font-bold transition-all shadow-sm ${isSaved ? 'bg-[#fff8f7] border-[#8f3546] text-[#8f3546]' : 'bg-white border-gray-200 text-gray-700 hover:border-gray-300'}`}
+              >
+                <span className={`material-symbols-outlined text-lg ${isSaved ? 'icon-fill text-[#8f3546]' : 'text-gray-400'}`}>favorite</span>
+                {isSaved ? 'Saved to Favorites' : 'Save Vendor'}
+              </button>
+            )}
 
             <div className="flex items-center gap-3 border-l border-gray-100 pl-4">
               <div className="flex flex-col items-end">
                 <span className="text-xs text-gray-400 font-bold uppercase tracking-wider">Rating</span>
-                <span className="text-sm text-gray-600 font-medium">{vendor.reviews} Reviews</span>
+                <span className="text-sm text-gray-600 font-medium">{totalReviews} Reviews</span>
               </div>
               <div className="bg-[#8f3546] text-white px-4 py-2 rounded-lg font-bold text-lg flex items-center gap-1 shadow-sm">
-                <span className="material-symbols-outlined icon-fill text-lg">star</span> {vendor.rating}
+                <span className="material-symbols-outlined icon-fill text-lg">star</span> {averageRating}
               </div>
             </div>
           </div>
@@ -299,18 +409,31 @@ export default function VendorProfile() {
                   onClick={() => setActiveTab(tab)}
                   className={`pb-3 text-sm font-bold uppercase tracking-wider transition-colors ${activeTab === tab ? 'border-b-2 border-[#8f3546] text-[#8f3546]' : 'text-gray-500 hover:text-gray-900'}`}
                 >
-                  {tab === 'reviews' ? `Reviews (${reviewsList.length + vendor.reviews})` : tab}
+                  {tab === 'reviews' ? `Reviews (${totalReviews})` : tab}
                 </button>
               ))}
             </div>
 
             {/* TAB CONTENT: PORTFOLIO */}
             {activeTab === 'portfolio' && (
-              <div className="grid grid-cols-2 gap-4">
-                <div className="aspect-square bg-gray-200 rounded-xl overflow-hidden shadow-sm"><img src="https://images.unsplash.com/photo-1595777457583-95e059d581b8?w=500&q=80" className="w-full h-full object-cover hover:scale-105 transition-transform duration-500" alt="Bride"/></div>
-                <div className="aspect-square bg-gray-200 rounded-xl overflow-hidden shadow-sm"><img src="https://images.unsplash.com/photo-1515372039744-b8f02a3ae446?w=500&q=80" className="w-full h-full object-cover hover:scale-105 transition-transform duration-500" alt="Bride"/></div>
-                <div className="aspect-square bg-gray-200 rounded-xl overflow-hidden shadow-sm"><img src="https://images.unsplash.com/photo-1549416878-b9ca95e1e4cb?w=500&q=80" className="w-full h-full object-cover hover:scale-105 transition-transform duration-500" alt="Bride"/></div>
-                <div className="aspect-square bg-gray-200 rounded-xl overflow-hidden shadow-sm"><img src="https://images.unsplash.com/photo-1522337660859-02fbefca4702?w=500&q=80" className="w-full h-full object-cover hover:scale-105 transition-transform duration-500" alt="Bride"/></div>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                {vendor.portfolio_images && vendor.portfolio_images.length > 0 ? (
+                  vendor.portfolio_images.map((imgUrl, idx) => (
+                    <div key={idx} className="aspect-square bg-gray-200 rounded-xl overflow-hidden shadow-sm group">
+                      <img 
+                        src={imgUrl} 
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
+                        alt={`${vendor.name} Portfolio Image ${idx + 1}`}
+                        onError={(e) => { (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1512496015851-a1fb82e75bc7?w=500&q=80'; }}
+                      />
+                    </div>
+                  ))
+                ) : (
+                  <div className="col-span-full py-16 flex flex-col items-center justify-center text-gray-400 bg-white rounded-2xl border border-dashed border-gray-200">
+                    <span className="material-symbols-outlined text-5xl mb-3 text-gray-300">photo_library</span>
+                    <p className="font-medium text-sm text-gray-500">No portfolio images uploaded yet.</p>
+                  </div>
+                )}
               </div>
             )}
 
@@ -345,26 +468,33 @@ export default function VendorProfile() {
                     <span className="material-symbols-outlined text-[#8f3546]">auto_awesome</span>
                     <h2 className="text-lg font-bold text-gray-900">AI Review Summary</h2>
                   </div>
-                  <p className="text-xs text-gray-500 font-bold uppercase tracking-widest mb-4">Based on {vendor.reviews} verified bridal reviews</p>
+                  <p className="text-xs text-gray-500 font-bold uppercase tracking-widest mb-4">Based on {totalReviews} verified bridal reviews</p>
                   <p className="text-gray-700 leading-relaxed text-sm">
-                    <b className="text-[#8f3546]">What brides loved:</b> {vendor.name} is consistently praised for punctuality, a calm demeanor during wedding chaos, and delivering a flawless base that lasts over 12 hours without creasing. 
+                    <b className="text-[#8f3546]">What brides loved:</b> {vendor.name} is consistently praised for punctuality, a calm demeanor during wedding chaos, and delivering a flawless finish that lasts. 
                   </p>
                 </div>
 
                 {/* WRITE REVIEW HEADER */}
                 <div className="flex justify-between items-center border-b border-gray-200 pb-4">
                   <h3 className="text-xl font-bold text-gray-900">Bride Experiences</h3>
-                  <button 
-                    onClick={() => setShowReviewForm(!showReviewForm)}
-                    className="bg-white border border-[#8f3546] text-[#8f3546] px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-[#8f3546] hover:text-white transition-all flex items-center gap-2"
-                  >
-                    <span className="material-symbols-outlined text-[16px]">edit_square</span>
-                    Write a Review
-                  </button>
+                  
+                  {!isOwner ? (
+                    <button 
+                      onClick={() => setShowReviewForm(!showReviewForm)}
+                      className="bg-white border border-[#8f3546] text-[#8f3546] px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-[#8f3546] hover:text-white transition-all flex items-center gap-2"
+                    >
+                      <span className="material-symbols-outlined text-[16px]">edit_square</span>
+                      Write a Review
+                    </button>
+                  ) : (
+                    <span className="text-xs text-gray-400 italic bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-100">
+                      You cannot review your own profile
+                    </span>
+                  )}
                 </div>
 
-                {/* REVIEW FORM (Conditionally Rendered) */}
-                {showReviewForm && (
+                {/* REVIEW FORM */}
+                {showReviewForm && !isOwner && (
                   <div className="bg-white p-6 rounded-2xl border-2 border-[#8f3546]/20 shadow-md mb-8 animate-fade-in">
                     <h4 className="font-bold text-gray-900 mb-4 text-lg">Rate your experience with {vendor.name}</h4>
                     
@@ -384,16 +514,45 @@ export default function VendorProfile() {
                     <textarea 
                       value={newReviewText}
                       onChange={(e) => setNewReviewText(e.target.value)}
-                      placeholder="Share details of your experience, the outcome, what you loved, or what could be improved..."
+                      placeholder="Share details of your experience and the final look..."
                       className="w-full bg-gray-50 border border-gray-200 rounded-xl p-4 text-sm text-gray-800 outline-none focus:ring-1 focus:ring-[#8f3546] focus:border-[#8f3546] mb-4 min-h-[120px]"
                     />
+
+                    {/* New Liked / Disliked Inputs */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                      <div>
+                        <label className="text-[10px] font-bold text-green-700 uppercase tracking-widest mb-2 flex items-center gap-1">
+                          <span className="material-symbols-outlined text-[14px]">thumb_up</span> What you loved
+                        </label>
+                        <input 
+                          type="text"
+                          value={newLiked}
+                          onChange={(e) => setNewLiked(e.target.value)}
+                          placeholder="e.g., Punctuality, Flawless base..."
+                          className="w-full bg-green-50/30 border border-green-100 rounded-xl p-3 text-sm text-gray-800 outline-none focus:ring-1 focus:ring-green-600 focus:border-green-600"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-red-700 uppercase tracking-widest mb-2 flex items-center gap-1">
+                          <span className="material-symbols-outlined text-[14px]">lightbulb</span> Room for improvement
+                        </label>
+                        <input 
+                          type="text"
+                          value={newDisliked}
+                          onChange={(e) => setNewDisliked(e.target.value)}
+                          placeholder="e.g., Communication, Pricing..."
+                          className="w-full bg-red-50/30 border border-red-100 rounded-xl p-3 text-sm text-gray-800 outline-none focus:ring-1 focus:ring-red-600 focus:border-red-600"
+                        />
+                      </div>
+                    </div>
 
                     <div className="flex items-center gap-3">
                       <button 
                         onClick={handleSubmitReview}
-                        className="bg-[#8f3546] text-white px-6 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-[#712030] transition-colors shadow-sm"
+                        disabled={isSubmittingReview}
+                        className="bg-[#8f3546] disabled:bg-[#8f3546]/60 text-white px-6 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-[#712030] transition-colors shadow-sm flex items-center gap-2"
                       >
-                        Publish Review
+                        {isSubmittingReview ? 'Publishing...' : 'Publish Review'}
                       </button>
                       <button 
                         onClick={() => setShowReviewForm(false)}
@@ -407,29 +566,58 @@ export default function VendorProfile() {
 
                 {/* REVIEWS LIST */}
                 <div className="space-y-4">
-                  {reviewsList.map((review) => (
-                    <div key={review.id} className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
-                      <div className="flex justify-between items-start mb-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-[#fff8f7] text-[#8f3546] border border-[#8f3546]/20 flex items-center justify-center font-bold text-lg">
-                            {review.initial}
+                  {reviewsList.length === 0 ? (
+                    <p className="text-gray-500 text-center py-8">No reviews yet. Be the first to review {vendor.name}!</p>
+                  ) : (
+                    reviewsList.map((review) => (
+                      <div key={review.id} className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+                        <div className="flex justify-between items-start mb-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-[#fff8f7] text-[#8f3546] border border-[#8f3546]/20 flex items-center justify-center font-bold text-lg">
+                              {review.client_name.charAt(0).toUpperCase()}
+                            </div>
+                            <div>
+                              <h4 className="font-bold text-gray-900 text-sm">{review.client_name}</h4>
+                              <p className="text-[10px] uppercase tracking-widest text-gray-400">Reviewed on {formatDate(review.created_at)}</p>
+                            </div>
                           </div>
-                          <div>
-                            <h4 className="font-bold text-gray-900 text-sm">{review.author}</h4>
-                            <p className="text-[10px] uppercase tracking-widest text-gray-400">Reviewed on {review.date}</p>
+                          <div className="flex items-center gap-0.5 text-[#8f3546]">
+                            {[1, 2, 3, 4, 5].map((star) => (
+                              <span key={star} className={`material-symbols-outlined text-sm ${star <= review.rating ? 'icon-fill' : 'text-gray-200'}`}>star</span>
+                            ))}
                           </div>
                         </div>
-                        <div className="flex items-center gap-0.5 text-[#8f3546]">
-                          {[1, 2, 3, 4, 5].map((star) => (
-                            <span key={star} className={`material-symbols-outlined text-sm ${star <= review.rating ? 'icon-fill' : 'text-gray-200'}`}>star</span>
-                          ))}
-                        </div>
+                        <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-line">
+                          &quot;{review.review_text}&quot;
+                        </p>
+
+                        {/* Display Liked/Disliked Blocks if they exist */}
+                        {(review.liked || review.disliked) && (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-5 pt-5 border-t border-gray-50">
+                            {review.liked && (
+                              <div className="bg-green-50/50 border border-green-100 p-4 rounded-xl">
+                                <div className="flex items-center gap-2 text-green-800 font-bold text-[10px] uppercase tracking-widest mb-2">
+                                  <span className="material-symbols-outlined text-[14px]">thumb_up</span>
+                                  What they loved
+                                </div>
+                                <p className="text-sm text-green-900">{review.liked}</p>
+                              </div>
+                            )}
+                            
+                            {review.disliked && (
+                              <div className="bg-red-50/50 border border-red-100 p-4 rounded-xl">
+                                <div className="flex items-center gap-2 text-red-800 font-bold text-[10px] uppercase tracking-widest mb-2">
+                                  <span className="material-symbols-outlined text-[14px]">lightbulb</span>
+                                  Room for improvement
+                                </div>
+                                <p className="text-sm text-red-900">{review.disliked}</p>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
-                      <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-line">
-                        &quot;{review.text}&quot;
-                      </p>
-                    </div>
-                  ))}
+                    ))
+                  )}
                 </div>
               </div>
             )}
@@ -462,6 +650,7 @@ export default function VendorProfile() {
                     value={selectedDate}
                     onChange={(e) => setSelectedDate(e.target.value)}
                     className="w-full px-4 py-3 text-sm text-gray-800 bg-transparent outline-none cursor-pointer"
+                    disabled={isOwner}
                     required
                   />
                 </div>
@@ -472,18 +661,25 @@ export default function VendorProfile() {
                 <p className="text-xl font-bold text-gray-900">₹5,000</p>
               </div>
 
-              <button 
-                onClick={handleCheckout}
-                disabled={isCheckoutLoading}
-                className="w-full bg-[#8f3546] hover:bg-[#712030] disabled:bg-gray-400 text-white py-3.5 rounded-xl font-bold uppercase tracking-widest text-xs shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2"
-              >
-                {isCheckoutLoading ? (
-                  <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
-                ) : (
-                  <span className="material-symbols-outlined text-lg">lock</span>
-                )}
-                {isCheckoutLoading ? 'Opening Gateway...' : 'Pay Deposit to Book'}
-              </button>
+              {isOwner ? (
+                <div className="w-full bg-gray-100 border border-gray-200 text-gray-500 py-3.5 rounded-xl font-bold uppercase tracking-widest text-xs flex items-center justify-center gap-2 cursor-not-allowed">
+                  <span className="material-symbols-outlined text-lg">block</span>
+                  This is your profile
+                </div>
+              ) : (
+                <button 
+                  onClick={handleCheckout}
+                  disabled={isCheckoutLoading}
+                  className="w-full bg-[#8f3546] hover:bg-[#712030] disabled:bg-gray-400 text-white py-3.5 rounded-xl font-bold uppercase tracking-widest text-xs shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2"
+                >
+                  {isCheckoutLoading ? (
+                    <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
+                  ) : (
+                    <span className="material-symbols-outlined text-lg">lock</span>
+                  )}
+                  {isCheckoutLoading ? 'Opening Gateway...' : 'Pay Deposit to Book'}
+                </button>
+              )}
               
               <button 
                 onClick={() => setShowPhone(!showPhone)}
