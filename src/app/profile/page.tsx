@@ -33,6 +33,7 @@ export default function BrideProfile() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('bookings');
   const router = useRouter();
+  const [selectedReceipt, setSelectedReceipt] = useState<any>(null); // For Receipt Modal
 
   // Dynamic Data States
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -79,7 +80,7 @@ export default function BrideProfile() {
               deposit: b.amount,
               date: `${monthNames[dateObj.getMonth()]} ${dateObj.getDate()}`,
               year: dateObj.getFullYear().toString(),
-              status: b.status.toUpperCase(),
+              status: (b.status || 'confirmed').toUpperCase(),
               // Grab the image from whichever service they booked, or use a fallback
               imageUrl: b.vendor?.image_url || b.mehendi?.image_url || 'https://images.unsplash.com/photo-1487412947147-5cebf100ffc2?w=500&q=80'
             };
@@ -126,6 +127,38 @@ export default function BrideProfile() {
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     router.push('/login');
+  };
+
+  // --- REFUND HANDLER ---
+  const handleRefund = async (bookingId: number) => {
+    const isConfirmed = window.confirm(
+      "Are you sure you want to cancel this booking and request a refund?\n\nYour ₹5,000 deposit will be returned to your original payment method in 5-7 business days."
+    );
+
+    if (!isConfirmed) return;
+
+    try {
+      // 1. Update the database status
+      const { error } = await supabase
+        .from('bookings')
+        .update({ status: 'refunded' })
+        .eq('id', bookingId);
+
+      if (error) throw error;
+
+      // 2. Update the local state instantly so the UI changes without a page refresh
+      setBookings(prevBookings => 
+        prevBookings.map(b => 
+          b.id === bookingId ? { ...b, status: 'REFUNDED' } : b
+        )
+      );
+
+      alert("✅ Cancellation successful! Your refund request has been initiated.");
+
+    } catch (error) {
+      console.error("Error processing refund:", error);
+      alert("There was an error processing your cancellation. Please contact support.");
+    }
   };
 
   const handlePasswordUpdate = async (e: React.FormEvent) => {
@@ -183,6 +216,7 @@ export default function BrideProfile() {
   }
 
   if (!user) return null;
+  const aiData = user.user_metadata?.ai_analysis;
 
   const emailName = user.email?.split('@')[0] || 'Bride';
   const firstName = emailName.charAt(0).toUpperCase() + emailName.slice(1).replace(/[0-9]/g, '');
@@ -200,6 +234,23 @@ export default function BrideProfile() {
       `}} />
 
       <Navbar />
+
+      {/* Receipt Modal */}
+      {selectedReceipt && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white p-8 rounded-2xl w-full max-w-md shadow-2xl">
+            <h2 className="text-2xl font-bold mb-4">Booking Receipt</h2>
+            <div className="space-y-3 text-sm">
+              <p><strong>Booking ID:</strong> #{selectedReceipt.id}</p>
+              <p><strong>Vendor:</strong> {selectedReceipt.vendor_name}</p>
+              <p><strong>Date:</strong> {new Date(selectedReceipt.event_date).toLocaleDateString()}</p>
+              <p><strong>Status:</strong> {selectedReceipt.status.toUpperCase()}</p>
+              <p className="text-xl font-bold mt-4">Total Paid: ₹{selectedReceipt.amount}</p>
+            </div>
+            <button onClick={() => setSelectedReceipt(null)} className="mt-6 w-full bg-[#8f3546] text-white py-3 rounded-xl font-bold">Close</button>
+          </div>
+        </div>
+      )}
 
       <main className="max-w-5xl mx-auto px-6 md:px-12 pt-32">
         
@@ -245,6 +296,7 @@ export default function BrideProfile() {
           {[
             { id: 'bookings', label: `My Bookings (${bookings.length})`, icon: 'calendar_month' },
             { id: 'saved', label: `Saved Vendors (${savedVendors.length})`, icon: 'favorite' },
+            { id: 'beauty-ai', label: `Beauty AI`, icon: 'auto_awesome' },
             { id: 'settings', label: 'Settings', icon: 'settings' }
           ].map(tab => (
             <button 
@@ -280,30 +332,66 @@ export default function BrideProfile() {
               ) : (
                 <div className="space-y-6">
                   {bookings.map((booking) => (
-                    <div key={booking.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col md:flex-row group">
+                    <div key={booking.id} className={`bg-white rounded-2xl border ${booking.status === 'REFUNDED' ? 'border-red-100 opacity-80' : 'border-gray-100'} shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col md:flex-row group`}>
                       <div className="w-full md:w-56 h-56 md:h-auto bg-gray-100 relative overflow-hidden">
-                        <img src={booking.imageUrl} alt={booking.vendorName} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
-                        <div className="absolute top-4 left-4 bg-white/95 backdrop-blur text-green-700 text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-full shadow-sm flex items-center gap-1">
-                          <span className="material-symbols-outlined text-[12px]">check_circle</span> {booking.status}
+                        <img 
+                          src={booking.imageUrl} 
+                          alt={booking.vendorName} 
+                          className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ${booking.status === 'REFUNDED' && 'grayscale'}`} 
+                        />
+                        
+                        {/* Dynamic Status Badge */}
+                        <div className={`absolute top-4 left-4 backdrop-blur text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-full shadow-sm flex items-center gap-1 ${
+                          booking.status === 'REFUNDED' ? 'bg-red-50/95 text-red-700' : 'bg-white/95 text-green-700'
+                        }`}>
+                          <span className="material-symbols-outlined text-[12px]">
+                            {booking.status === 'REFUNDED' ? 'cancel' : 'check_circle'}
+                          </span> 
+                          {booking.status}
                         </div>
                       </div>
+
                       <div className="p-6 md:p-8 flex-1 flex flex-col justify-center bg-white">
                         <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mb-2">Booking #{booking.id}</p>
-                        <h3 className="text-2xl font-bold text-gray-900 mb-2">{booking.vendorName}</h3>
+                        <h3 className={`text-2xl font-bold mb-2 ${booking.status === 'REFUNDED' ? 'text-gray-400 line-through' : 'text-gray-900'}`}>{booking.vendorName}</h3>
                         <p className="text-gray-600 mb-6 font-medium">{booking.service}</p>
-                        <div className="inline-flex items-center gap-2 bg-[#fff8f7] text-[#8f3546] px-4 py-2 rounded-xl text-sm font-bold w-fit border border-[#8f3546]/10">
+                        
+                        <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold w-fit border ${
+                          booking.status === 'REFUNDED' 
+                            ? 'bg-gray-50 text-gray-400 border-gray-200' 
+                            : 'bg-[#fff8f7] text-[#8f3546] border-[#8f3546]/10'
+                        }`}>
                           <span className="material-symbols-outlined text-[20px]">payments</span> Paid Deposit: ₹{booking.deposit.toLocaleString()}
                         </div>
                       </div>
+
                       <div className="border-t md:border-t-0 md:border-l border-dashed border-gray-200 p-6 md:p-8 md:w-64 flex flex-col items-center justify-center bg-gray-50/50 relative">
                         <div className="hidden md:block absolute -left-3 top-[-12px] w-6 h-6 bg-[#fff8f7] rounded-full border-b border-gray-100"></div>
                         <div className="hidden md:block absolute -left-3 bottom-[-12px] w-6 h-6 bg-[#fff8f7] rounded-full border-t border-gray-100"></div>
+                        
                         <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-3">Event Date</p>
-                        <p className="text-4xl font-display-custom font-bold text-[#8f3546] mb-1">{booking.date}</p>
+                        <p className={`text-4xl font-display-custom font-bold mb-1 ${booking.status === 'REFUNDED' ? 'text-gray-400 line-through' : 'text-[#8f3546]'}`}>{booking.date}</p>
                         <p className="text-sm text-gray-500 font-bold mb-6">{booking.year}</p>
-                        <button className="text-xs font-bold uppercase tracking-widest text-[#8f3546] hover:text-gray-900 transition-colors flex items-center gap-1 group/btn">
-                          View Receipt <span className="material-symbols-outlined text-[16px] group-hover/btn:translate-x-1 transition-transform">arrow_forward</span>
-                        </button>
+                        
+                        {/* Action Buttons: Show Receipt OR Refund depending on Status */}
+                        {booking.status === 'REFUNDED' ? (
+                          <p className="text-xs font-bold uppercase tracking-widest text-red-600 flex items-center gap-1">
+                            <span className="material-symbols-outlined text-[16px]">info</span> Refund Processing
+                          </p>
+                        ) : (
+                          <div className="flex flex-col items-center gap-3">
+                            <button onClick={() => setSelectedReceipt(booking)} className="text-xs font-bold uppercase tracking-widest text-[#8f3546] hover:text-gray-900 transition-colors flex items-center gap-1 group/btn">
+                              View Receipt <span className="material-symbols-outlined text-[16px] group-hover/btn:translate-x-1 transition-transform">arrow_forward</span>
+                            </button>
+                            
+                            <button 
+                              onClick={() => handleRefund(booking.id)}
+                              className="text-[10px] font-bold uppercase tracking-widest text-red-400 hover:text-red-700 transition-colors underline underline-offset-2 mt-2"
+                            >
+                              Cancel Booking
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -488,6 +576,34 @@ export default function BrideProfile() {
 
             </div>
           )}
+
+          {/* --- BEAUTY AI TAB --- */}
+        {activeTab === 'beauty-ai' && (
+          <div className="bg-white p-8 rounded-2xl border shadow-sm">
+            {aiData ? (
+              <>
+                <h2 className="text-2xl font-bold mb-6">Your Beauty Profile</h2>
+                <div className="grid grid-cols-2 gap-4 mb-8">
+                  <div className="p-4 bg-gray-50 rounded-xl"><p className="text-[10px] uppercase">Shape</p><p className="font-bold">{aiData.shape}</p></div>
+                  <div className="p-4 bg-gray-50 rounded-xl"><p className="text-[10px] uppercase">Tone</p><p className="font-bold">{aiData.tone}</p></div>
+                </div>
+                <p className="text-sm font-bold mb-4">Matches:</p>
+                <div className="flex gap-2">
+                  {aiData.matches.map((m: any) => (
+                    <button key={m.id} onClick={() => router.push(`/vendor/${m.id}`)} className="bg-[#fff8f7] border border-[#8f3546] text-[#8f3546] px-4 py-2 rounded-lg font-bold text-xs">
+                      {m.name}
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="text-center py-12">
+                <p className="mb-4 text-gray-500">No scan results found.</p>
+                <button onClick={() => router.push('/ai-scan')} className="bg-[#8f3546] text-white px-6 py-3 rounded-xl font-bold text-xs">Scan Now</button>
+              </div>
+            )}
+          </div>
+        )}
 
         </div>
       </main>

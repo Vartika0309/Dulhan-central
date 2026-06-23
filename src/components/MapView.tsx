@@ -65,16 +65,20 @@ export default function MapView({ vendors }: { vendors: Vendor[] }) {
           iconAnchor: [12, 12]
         });
 
+        // Wrapped the popup content in an <a> tag pointing to the vendor page
         const popupContent = `
-          <div style="padding: 8px; min-width: 200px; font-family: sans-serif;">
+          <a href="/vendor/${vendor.id}" style="display: block; padding: 8px; min-width: 200px; font-family: sans-serif; text-decoration: none; color: inherit; cursor: pointer;">
             <img style="width: 100%; height: 96px; object-fit: cover; border-radius: 4px; margin-bottom: 8px;" src="${vendor.image_url}" alt="${vendor.name}" />
             <h4 style="font-weight: bold; font-size: 14px; color: #8f3546; margin: 0;">${vendor.name}</h4>
             <p style="font-size: 12px; color: #6b7280; margin: 2px 0 8px 0;">${vendor.location}</p>
             <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 4px; border-top: 1px solid #f3f4f6;">
-              <span style="font-size: 12px; font-weight: bold; color: #111827;">₹${vendor.starting_price.toLocaleString()}</span>
+              <span style="font-size: 12px; font-weight: bold; color: #111827;">₹${vendor.starting_price?.toLocaleString()}</span>
               <span style="font-size: 12px; font-weight: bold; color: #8f3546;">★ ${vendor.rating}</span>
             </div>
-          </div>
+            <div style="margin-top: 10px; width: 100%; padding: 6px 0; background-color: #8f3546; color: white; text-align: center; border-radius: 4px; font-size: 12px; font-weight: bold; transition: opacity 0.2s;">
+              View Portfolio
+            </div>
+          </a>
         `;
 
         const marker = L.marker([lat, lng], { icon: pulsingIcon }).bindPopup(popupContent);

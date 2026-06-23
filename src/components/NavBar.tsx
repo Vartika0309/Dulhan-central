@@ -53,6 +53,11 @@ export default function Navbar() {
         <Link href="/mehendi">
           <span className={`text-[15px] uppercase tracking-widest cursor-pointer transition-colors ${pathname === '/mehendi' ? 'text-[#8f3546] font-bold' : 'text-gray-500 hover:text-[#8f3546]'}`}>Mehendi</span>
         </Link>
+        
+        <Link href="/ai-scan">          
+        <span className={`text-[15px] uppercase tracking-widest cursor-pointer transition-colors ${pathname === '/ai-scan' ? 'text-[#8f3546] font-bold' : 'text-gray-500 hover:text-[#8f3546]'}`}>
+  Beauty Scan</span>
+</Link>
       </nav>
 
       {/* Col 3: Actions (Right) */}
