@@ -4,6 +4,10 @@ import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import Navbar from '@/components/NavBar';
 import Footer from '@/components/footer';
+import { 
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, 
+  LineChart, Line 
+} from 'recharts';
 
 // --- INTERFACES ---
 interface Profile {
@@ -61,6 +65,10 @@ export default function VendorDashboard() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'overview' | 'bookings' | 'inbox' | 'reviews'>('overview');
   
+  // Calendar States
+  const [bookingView, setBookingView] = useState<'list' | 'calendar'>('calendar');
+  const [currentMonth, setCurrentMonth] = useState(new Date());
+
   // Chat States
   const [activeChatRoom, setActiveChatRoom] = useState<string | null>(null);
   const [replyText, setReplyText] = useState('');
@@ -77,7 +85,6 @@ export default function VendorDashboard() {
         let currentProfile = null;
         let isVendor = true;
 
-        // Fetch Profile
         const { data: vendorData } = await supabase.from('vendor').select('*').eq('user_id', user.id).single();
 
         if (vendorData) {
@@ -91,15 +98,12 @@ export default function VendorDashboard() {
           setProfile(currentProfile);
           const idColumn = isVendor ? 'vendor_id' : 'mehendi_id';
 
-          // Fetch Reviews
           const { data: reviewData } = await supabase.from('reviews').select('*').eq(idColumn, currentProfile.id).order('created_at', { ascending: false });
           if (reviewData) setReviews(reviewData);
 
-          // Fetch Bookings
           const { data: bookingData } = await supabase.from('bookings').select('*').eq(idColumn, currentProfile.id).order('event_date', { ascending: true });
           if (bookingData) setBookings(bookingData);
 
-          // Fetch Messages (Any chat room ending with this vendor's ID)
           const { data: messageData } = await supabase.from('messages').select('*').like('chat_room_id', `%_${currentProfile.id}`).order('created_at', { ascending: true });
           if (messageData) setMessages(messageData);
         }
@@ -113,14 +117,12 @@ export default function VendorDashboard() {
     fetchDashboardData();
   }, []);
 
-  // Set up Realtime listener for incoming messages
   useEffect(() => {
     if (!profile) return;
     
     const channel = supabase.channel('vendor_inbox')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
         const newMsg = payload.new as Message;
-        // Only accept messages meant for this vendor
         if (newMsg.chat_room_id.endsWith(`_${profile.id}`)) {
           setMessages((prev) => {
             if (prev.find(m => m.id === newMsg.id)) return prev;
@@ -158,14 +160,129 @@ export default function VendorDashboard() {
     }
   };
 
+  const handleUpdateStatus = async (bookingId: number, newStatus: string) => {
+    setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status: newStatus } : b));
+
+    const { error } = await supabase
+      .from('bookings')
+      .update({ status: newStatus })
+      .eq('id', bookingId);
+      
+    if (error) {
+      console.error("Error updating status:", error);
+      alert("Failed to update status.");
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status?.toLowerCase()) {
+      case 'new': return 'bg-blue-50 text-blue-700 border-blue-200';
+      case 'quoted': return 'bg-purple-50 text-purple-700 border-purple-200';
+      case 'payment pending': return 'bg-yellow-50 text-yellow-700 border-yellow-200';
+      case 'booked': return 'bg-red-50 text-red-700 border-red-200'; 
+      case 'completed': return 'bg-gray-100 text-gray-600 border-gray-200';
+      default: return 'bg-gray-50 text-gray-700 border-gray-200';
+    }
+  };
+
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
   };
 
+  // --- CHART DATA PROCESSING ---
+  const generateChartData = () => {
+    const monthlyData = Array.from({ length: 12 }, (_, i) => {
+      const monthName = new Date(0, i).toLocaleString('en-US', { month: 'short' });
+      return { month: monthName, revenue: 0, bookings: 0 };
+    });
+
+    bookings.forEach(b => {
+      const date = new Date(b.event_date);
+      const monthIndex = date.getMonth();
+      // Aggregate revenue (use total_amount if available, fallback to deposit amount)
+      monthlyData[monthIndex].revenue += (b.total_amount || b.amount);
+      monthlyData[monthIndex].bookings += 1;
+    });
+
+    // Optionally filter to only show months from the first booking to the last
+    return monthlyData;
+  };
+
+  const chartData = generateChartData();
+
+  // --- CALENDAR LOGIC ---
+  const nextMonth = () => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1));
+  const prevMonth = () => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1));
+  
+  const getDaysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
+  const getFirstDayOfMonth = (year: number, month: number) => new Date(year, month, 1).getDay();
+
+  const renderCalendar = () => {
+    const year = currentMonth.getFullYear();
+    const month = currentMonth.getMonth();
+    const daysInMonth = getDaysInMonth(year, month);
+    const firstDay = getFirstDayOfMonth(year, month);
+    const today = new Date();
+
+    const days = [];
+    const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+    const calendarHeader = weekDays.map(d => (
+      <div key={d} className="text-center font-bold text-xs text-gray-400 uppercase tracking-wider py-3 bg-gray-50/50">
+        {d}
+      </div>
+    ));
+
+    for (let i = 0; i < firstDay; i++) {
+      days.push(<div key={`empty-${i}`} className="min-h-[120px] bg-gray-50/30 border-r border-b border-gray-100"></div>);
+    }
+
+    for (let day = 1; day <= daysInMonth; day++) {
+      const isToday = today.getDate() === day && today.getMonth() === month && today.getFullYear() === year;
+      
+      const dayBookings = bookings.filter(b => {
+        const bDate = new Date(b.event_date);
+        return bDate.getFullYear() === year && bDate.getMonth() === month && bDate.getDate() === day;
+      });
+
+      days.push(
+        <div key={day} className={`min-h-[120px] p-2 border-r border-b border-gray-100 transition-colors hover:bg-gray-50/50 ${dayBookings.length === 0 ? 'bg-green-50/10' : ''}`}>
+          <div className="flex justify-between items-start mb-1">
+            <span className={`text-sm font-semibold w-7 h-7 flex items-center justify-center rounded-full ${isToday ? 'bg-[#8f3546] text-white' : 'text-gray-700'}`}>
+              {day}
+            </span>
+            {dayBookings.length === 0 && <span className="text-[10px] text-green-600 font-bold opacity-50">Available</span>}
+          </div>
+          
+          <div className="space-y-1 mt-2">
+            {dayBookings.map(b => (
+              <div key={b.id} className={`text-[10px] p-1.5 rounded-md border shadow-sm ${getStatusColor(b.status)}`}>
+                <div className="font-bold flex items-center justify-between">
+                  <span>...{b.user_id.slice(-4)}</span>
+                  <span className="opacity-75">{b.headcount}p</span>
+                </div>
+                <div className="text-[9px] mt-0.5 truncate">{b.status}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="border border-gray-100 rounded-xl overflow-hidden bg-white shadow-sm">
+        <div className="grid grid-cols-7 border-b border-gray-100">
+          {calendarHeader}
+        </div>
+        <div className="grid grid-cols-7">
+          {days}
+        </div>
+      </div>
+    );
+  };
+
   const totalReviews = reviews.length;
   const averageRating = totalReviews > 0 ? (reviews.reduce((sum, review) => sum + review.rating, 0) / totalReviews).toFixed(1) : '0.0';
-  
-  // Group messages by chat room to create the inbox list
   const chatRooms = Array.from(new Set(messages.map(m => m.chat_room_id)));
 
   if (loading) return <div className="min-h-screen flex items-center justify-center bg-[#fff8f7]"><div className="w-10 h-10 border-4 border-[#8f3546] border-t-transparent rounded-full animate-spin"></div></div>;
@@ -179,6 +296,9 @@ export default function VendorDashboard() {
         .font-sans-custom { font-family: 'Inter', sans-serif; }
         .material-symbols-outlined { font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
         .icon-fill { font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        
+        /* Custom Tooltip Styling for Charts */
+        .custom-tooltip { background: white; border: 1px solid #f3f4f6; border-radius: 8px; padding: 12px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); }
       `}} />
       <Navbar />
 
@@ -225,45 +345,167 @@ export default function VendorDashboard() {
 
               {/* OVERVIEW TAB */}
               {activeTab === 'overview' && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                  <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm"><div className="w-10 h-10 rounded-xl bg-[#fff8f7] text-[#8f3546] flex items-center justify-center mb-4"><span className="material-symbols-outlined icon-fill">star</span></div><h3 className="text-3xl font-bold mb-1">{averageRating}</h3><p className="text-sm text-gray-500">Average Rating</p></div>
-                  <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm"><div className="w-10 h-10 rounded-xl bg-[#fff8f7] text-[#8f3546] flex items-center justify-center mb-4"><span className="material-symbols-outlined icon-fill">book_online</span></div><h3 className="text-3xl font-bold mb-1">{bookings.length}</h3><p className="text-sm text-gray-500">Total Bookings</p></div>
-                  <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm"><div className="w-10 h-10 rounded-xl bg-[#fff8f7] text-[#8f3546] flex items-center justify-center mb-4"><span className="material-symbols-outlined icon-fill">forum</span></div><h3 className="text-3xl font-bold mb-1">{chatRooms.length}</h3><p className="text-sm text-gray-500">Active Chats</p></div>
-                  <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm"><div className="w-10 h-10 rounded-xl bg-green-50 text-green-600 flex items-center justify-center mb-4"><span className="material-symbols-outlined icon-fill">payments</span></div><h3 className="text-3xl font-bold mb-1 text-green-700">₹{(bookings.reduce((sum, b) => sum + b.amount, 0)).toLocaleString()}</h3><p className="text-sm text-gray-500">Deposits Secured</p></div>
+                <div className="space-y-8">
+                  {/* Stats Grid */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm"><div className="w-10 h-10 rounded-xl bg-[#fff8f7] text-[#8f3546] flex items-center justify-center mb-4"><span className="material-symbols-outlined icon-fill">star</span></div><h3 className="text-3xl font-bold mb-1">{averageRating}</h3><p className="text-sm text-gray-500">Average Rating</p></div>
+                    <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm"><div className="w-10 h-10 rounded-xl bg-[#fff8f7] text-[#8f3546] flex items-center justify-center mb-4"><span className="material-symbols-outlined icon-fill">book_online</span></div><h3 className="text-3xl font-bold mb-1">{bookings.length}</h3><p className="text-sm text-gray-500">Total Bookings</p></div>
+                    <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm"><div className="w-10 h-10 rounded-xl bg-[#fff8f7] text-[#8f3546] flex items-center justify-center mb-4"><span className="material-symbols-outlined icon-fill">forum</span></div><h3 className="text-3xl font-bold mb-1">{chatRooms.length}</h3><p className="text-sm text-gray-500">Active Chats</p></div>
+                    <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm"><div className="w-10 h-10 rounded-xl bg-green-50 text-green-600 flex items-center justify-center mb-4"><span className="material-symbols-outlined icon-fill">payments</span></div><h3 className="text-3xl font-bold mb-1 text-green-700">₹{(bookings.reduce((sum, b) => sum + b.amount, 0)).toLocaleString()}</h3><p className="text-sm text-gray-500">Deposits Secured</p></div>
+                  </div>
+
+                  {/* Charts Section */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Revenue Bar Chart */}
+                    <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+                      <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
+                        <span className="material-symbols-outlined text-[#8f3546]">bar_chart</span> 
+                        Revenue Forecast
+                      </h3>
+                      <div className="h-72 w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
+                            <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6b7280' }} dy={10} />
+                            <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6b7280' }} tickFormatter={(value: number) => `₹${value / 1000}k`} />                            <RechartsTooltip 
+                              cursor={{ fill: '#fff8f7' }}
+                              content={({ active, payload }) => {
+                                if (active && payload && payload.length) {
+                                  return (
+                                    <div className="custom-tooltip">
+                                      <p className="text-xs font-bold text-gray-500 mb-1">{payload[0].payload.month}</p>
+                                      <p className="text-sm font-bold text-[#8f3546]">₹{payload[0].value?.toLocaleString()}</p>
+                                    </div>
+                                  );
+                                }
+                                return null;
+                              }}
+                            />
+                            <Bar dataKey="revenue" fill="#8f3546" radius={[4, 4, 0, 0]} barSize={32} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+
+                    {/* Bookings Line Chart */}
+                    <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+                      <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
+                        <span className="material-symbols-outlined text-[#8f3546]">monitoring</span> 
+                        Booking Trends
+                      </h3>
+                      <div className="h-72 w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <LineChart data={chartData} margin={{ top: 10, right: 10, left: -30, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
+                            <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6b7280' }} dy={10} />
+                            <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6b7280' }} allowDecimals={false} />
+                            <RechartsTooltip 
+                              content={({ active, payload }) => {
+                                if (active && payload && payload.length) {
+                                  return (
+                                    <div className="custom-tooltip">
+                                      <p className="text-xs font-bold text-gray-500 mb-1">{payload[0].payload.month}</p>
+                                      <p className="text-sm font-bold text-gray-900">{payload[0].value} Events</p>
+                                    </div>
+                                  );
+                                }
+                                return null;
+                              }}
+                            />
+                            <Line type="monotone" dataKey="bookings" stroke="#22191a" strokeWidth={3} dot={{ fill: '#8f3546', strokeWidth: 2, r: 4 }} activeDot={{ r: 6 }} />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )}
 
               {/* BOOKINGS TAB */}
               {activeTab === 'bookings' && (
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 overflow-hidden">
-                  <h2 className="text-xl font-bold mb-6">Upcoming & Past Events</h2>
-                  {bookings.length === 0 ? (
-                    <p className="text-gray-500 py-8 text-center">No bookings received yet.</p>
-                  ) : (
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left border-collapse">
-                        <thead>
-                          <tr className="bg-gray-50 text-xs uppercase tracking-widest text-gray-500">
-                            <th className="p-4 rounded-tl-xl">Event Date</th>
-                            <th className="p-4">Client ID</th>
-                            <th className="p-4">Party Size</th>
-                            <th className="p-4">Total Contract</th>
-                            <th className="p-4 rounded-tr-xl">Deposit Paid</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {bookings.map((b) => (
-                            <tr key={b.id} className="border-b border-gray-100 hover:bg-gray-50/50 transition-colors">
-                              <td className="p-4 font-bold text-gray-900">{formatDate(b.event_date)}</td>
-                              <td className="p-4 text-xs text-gray-500">...{b.user_id.slice(-6)}</td>
-                              <td className="p-4"><span className="bg-[#fff8f7] text-[#8f3546] px-3 py-1 rounded-full text-xs font-bold">{b.headcount} Guests</span></td>
-                              <td className="p-4 font-bold">₹{b.total_amount?.toLocaleString() || b.amount.toLocaleString()}</td>
-                              <td className="p-4 text-green-600 font-bold flex items-center gap-1"><span className="material-symbols-outlined text-[16px]">check_circle</span> ₹{b.amount.toLocaleString()}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                  
+                  {/* Header & Controls */}
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+                    <h2 className="text-xl font-bold">Pipeline & Availability</h2>
+                    
+                    <div className="flex items-center gap-4">
+                      {bookingView === 'calendar' && (
+                        <div className="flex items-center gap-2">
+                          <button onClick={prevMonth} className="p-1 rounded bg-gray-100 hover:bg-gray-200 transition-colors"><span className="material-symbols-outlined text-[18px]">chevron_left</span></button>
+                          <span className="font-bold text-sm w-32 text-center">
+                            {currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                          </span>
+                          <button onClick={nextMonth} className="p-1 rounded bg-gray-100 hover:bg-gray-200 transition-colors"><span className="material-symbols-outlined text-[18px]">chevron_right</span></button>
+                        </div>
+                      )}
+
+                      <div className="bg-gray-100 p-1 rounded-lg flex text-sm font-semibold">
+                        <button 
+                          onClick={() => setBookingView('calendar')} 
+                          className={`px-4 py-1.5 rounded-md flex items-center gap-1 transition-all ${bookingView === 'calendar' ? 'bg-white shadow-sm text-[#8f3546]' : 'text-gray-500'}`}
+                        >
+                          <span className="material-symbols-outlined text-[16px]">calendar_view_month</span> Calendar
+                        </button>
+                        <button 
+                          onClick={() => setBookingView('list')} 
+                          className={`px-4 py-1.5 rounded-md flex items-center gap-1 transition-all ${bookingView === 'list' ? 'bg-white shadow-sm text-[#8f3546]' : 'text-gray-500'}`}
+                        >
+                          <span className="material-symbols-outlined text-[16px]">view_list</span> Ledger
+                        </button>
+                      </div>
                     </div>
+                  </div>
+
+                  {bookings.length === 0 && bookingView === 'list' ? (
+                    <p className="text-gray-500 py-8 text-center">No inquiries or bookings received yet.</p>
+                  ) : (
+                    <>
+                      {/* LIST VIEW */}
+                      {bookingView === 'list' && (
+                        <div className="overflow-x-auto border border-gray-100 rounded-xl">
+                          <table className="w-full text-left border-collapse">
+                            <thead>
+                              <tr className="bg-gray-50 text-xs uppercase tracking-widest text-gray-500">
+                                <th className="p-4">Event Date</th>
+                                <th className="p-4">Client ID</th>
+                                <th className="p-4">Party Size</th>
+                                <th className="p-4">Total Contract</th>
+                                <th className="p-4">Deposit Paid</th>
+                                <th className="p-4">Status Pipeline</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {bookings.map((b) => (
+                                <tr key={b.id} className="border-t border-gray-100 hover:bg-gray-50/50 transition-colors">
+                                  <td className="p-4 font-bold text-gray-900">{formatDate(b.event_date)}</td>
+                                  <td className="p-4 text-xs text-gray-500">...{b.user_id.slice(-6)}</td>
+                                  <td className="p-4"><span className="bg-[#fff8f7] text-[#8f3546] px-3 py-1 rounded-full text-xs font-bold">{b.headcount} Guests</span></td>
+                                  <td className="p-4 font-bold">₹{b.total_amount?.toLocaleString() || b.amount.toLocaleString()}</td>
+                                  <td className="p-4 text-green-600 font-bold flex items-center gap-1"><span className="material-symbols-outlined text-[16px]">check_circle</span> ₹{b.amount.toLocaleString()}</td>
+                                  <td className="p-4">
+                                    <select
+                                      value={b.status || 'New'}
+                                      onChange={(e) => handleUpdateStatus(b.id, e.target.value)}
+                                      className={`text-xs font-bold px-3 py-1.5 rounded-full border outline-none cursor-pointer appearance-none text-center shadow-sm transition-all w-32 ${getStatusColor(b.status || 'New')}`}
+                                    >
+                                      <option value="New">New</option>
+                                      <option value="Quoted">Quoted</option>
+                                      <option value="Payment Pending">Payment Pending</option>
+                                      <option value="Booked">Booked</option>
+                                      <option value="Completed">Completed</option>
+                                    </select>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+
+                      {/* CALENDAR VIEW */}
+                      {bookingView === 'calendar' && renderCalendar()}
+                    </>
                   )}
                 </div>
               )}
@@ -271,7 +513,6 @@ export default function VendorDashboard() {
               {/* INBOX TAB */}
               {activeTab === 'inbox' && (
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 flex h-[600px] overflow-hidden">
-                  
                   {/* Left Sidebar: Chat List */}
                   <div className="w-1/3 border-r border-gray-100 bg-gray-50/50 flex flex-col">
                     <div className="p-4 border-b border-gray-100 bg-white"><h3 className="font-bold text-gray-900">Active Conversations</h3></div>
@@ -282,7 +523,7 @@ export default function VendorDashboard() {
                         chatRooms.map(roomId => {
                           const roomMessages = messages.filter(m => m.chat_room_id === roomId);
                           const lastMsg = roomMessages[roomMessages.length - 1];
-                          const brideId = roomId.split('_')[0]; // Extract bride's ID from room string
+                          const brideId = roomId.split('_')[0];
                           
                           return (
                             <button 
@@ -310,7 +551,6 @@ export default function VendorDashboard() {
                           {messages.filter(m => m.chat_room_id === activeChatRoom).map((msg, idx) => {
                             const isMe = msg.sender_id === currentUser?.id;
                             
-                            // Render AI Scan
                             if (msg.message_type === 'ai_scan') {
                               return (
                                 <div key={idx} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
@@ -326,7 +566,6 @@ export default function VendorDashboard() {
                               );
                             }
 
-                            // Render Images
                             if (msg.message_type === 'image') {
                               return (
                                 <div key={idx} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
@@ -337,7 +576,6 @@ export default function VendorDashboard() {
                               );
                             }
 
-                            // Render Standard Text
                             return (
                               <div key={idx} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
                                 <div className={`px-4 py-2.5 rounded-2xl max-w-[80%] text-sm shadow-sm ${isMe ? 'bg-[#22191a] text-white rounded-br-none' : 'bg-white border border-gray-200 text-gray-800 rounded-bl-none'}`}>
@@ -367,7 +605,7 @@ export default function VendorDashboard() {
                 </div>
               )}
 
-              {/* REVIEWS TAB (Retained from your original code) */}
+              {/* REVIEWS TAB */}
               {activeTab === 'reviews' && (
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
                   <h2 className="text-xl font-bold mb-6">Client Feedback</h2>
