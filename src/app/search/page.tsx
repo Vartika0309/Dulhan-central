@@ -58,6 +58,10 @@ export default function SearchPage() {
   const [travelsToVenue, setTravelsToVenue] = useState('all');
   const [selectedRating, setSelectedRating] = useState('all');
 
+  // --- GEOLOCATION STATES ---
+  const [isNearMe, setIsNearMe] = useState(false);
+  const [userCoords, setUserCoords] = useState<{ lat: number, lng: number } | null>(null);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [layoutMode, setLayoutMode] = useState<'grid' | 'list'>('grid');
   const [showMap, setShowMap] = useState(false);
@@ -72,6 +76,29 @@ export default function SearchPage() {
     const allServices = vendors.flatMap(v => v.services_offered || []);
     return ['all', ...Array.from(new Set(allServices))];
   }, [vendors]);
+
+  // --- GEOLOCATION HELPER ---
+  const getNearbyVendors = () => {
+    if (isNearMe) {
+      setIsNearMe(false);
+      setUserCoords(null);
+    } else {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition((pos) => {
+          setUserCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+          setIsNearMe(true);
+        }, (err) => alert("Please enable location access to use 'Near Me'"));
+      }
+    }
+  };
+
+  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371; // km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(lat1 * Math.PI/180) * Math.cos(lat2 * Math.PI/180) * Math.sin(dLon/2) * Math.sin(dLon/2);
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  };
 
   // --- FILTERING LOGIC ---
   const filteredVendors = useMemo(() => {
@@ -88,9 +115,19 @@ export default function SearchPage() {
         (vendor.service_mode && (travelsToVenue === 'yes' ? vendor.service_mode.includes('home') : vendor.service_mode.includes('salon')));
       const matchesRating = selectedRating === 'all' || vendor.rating >= Number(selectedRating);
 
-      return matchesSearch && matchesLocality && matchesBudget && matchesSpecialty && matchesTravels && matchesRating;
+      // Distance matching
+      let matchesNearMe = true;
+        if (isNearMe && userCoords) {
+          const coords = (vendor as any).coordinates;
+          if (coords && typeof coords.lat === 'number' && typeof coords.lng === 'number') {
+            const dist = calculateDistance(userCoords.lat, userCoords.lng, coords.lat, coords.lng);
+            matchesNearMe = dist <= 10; // 10km radius
+          }
+      }
+
+      return matchesSearch && matchesLocality && matchesBudget && matchesSpecialty && matchesTravels && matchesRating && matchesNearMe;
     });
-  }, [vendors, searchQuery, selectedLocality, maxBudget, selectedSpecialty, travelsToVenue, selectedRating]);
+  }, [vendors, searchQuery, selectedLocality, maxBudget, selectedSpecialty, travelsToVenue, selectedRating, isNearMe, userCoords]);
 
   return (
     <div className="bg-[#fff8f7] text-[#22191a] font-sans-custom min-h-screen">
@@ -133,7 +170,7 @@ export default function SearchPage() {
             <span>Vendors</span> <span className="material-symbols-outlined text-xs">chevron_right</span>
             <span className="text-gray-800 font-semibold">Bridal Makeup Artists</span>
           </nav>
-          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mt-4">
+          <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 mt-4">
             <div>
               <h1 className="font-display-custom text-3xl md:text-4xl font-bold text-gray-900 leading-tight">
                 Bridal Makeup Artists in Delhi NCR
@@ -143,10 +180,24 @@ export default function SearchPage() {
               </p>
             </div>
             
-            {/* Visual Callout for the Bot */}
-            <div className="bg-white border border-[#8f3546]/20 rounded-xl px-5 py-3 flex items-center gap-3 shadow-sm hover:shadow-md transition-all">
-              <MagicLampIcon />
-              <div className="text-sm">Need Help? <strong className="text-[#8f3546]">Click the DC Genie</strong> icon below!</div>
+            <div className="flex flex-col sm:flex-row gap-3 items-center">
+              {/* Location Toggle */}
+              <button 
+                onClick={getNearbyVendors} 
+                className={`px-4 py-3 sm:py-2 text-sm sm:text-xs font-bold rounded-xl border transition-all h-full flex items-center justify-center min-w-[140px] shadow-sm hover:shadow-md ${
+                  isNearMe 
+                  ? 'bg-[#8f3546] text-white border-[#8f3546]' 
+                  : 'bg-white border-gray-200 text-[#8f3546]'
+                }`}
+              >
+                {isNearMe ? '✓ Near Me (10km)' : '📍 Find Near Me'}
+              </button>
+
+              {/* Visual Callout for the Bot */}
+              <div className="bg-white border border-[#8f3546]/20 rounded-xl px-5 py-3 flex items-center gap-3 shadow-sm hover:shadow-md transition-all">
+                <MagicLampIcon />
+                <div className="text-sm">Need Help? <strong className="text-[#8f3546]">Click the DC Genie</strong> icon below!</div>
+              </div>
             </div>
           </div>
         </div>
