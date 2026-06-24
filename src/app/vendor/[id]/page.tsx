@@ -318,8 +318,10 @@ export default function VendorProfile() {
             if (bookingError) throw bookingError;
             alert(`🎉 Booking Confirmed! Date Locked: ${selectedDate}`);
             router.push('/profile');
-          } catch (err) { alert("Payment succeeded, but error updating profile."); }
-        },
+} catch (err: any) { 
+  console.error("Database Insert Error:", err);
+  alert(`Payment succeeded, but DB failed: ${err?.message || err?.details || JSON.stringify(err)}`); 
+}        },
         prefill: { name: session.user.email?.split('@')[0], email: session.user.email, contact: '9999999999' },
         theme: { color: '#8f3546' },
       };
@@ -580,7 +582,7 @@ export default function VendorProfile() {
               if (msg.message_type === 'image') {
                 return (
                   <div key={idx} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`p-1.5 rounded-2xl max-w-[70%] shadow-sm ${isMe ? 'bg-[#8f3546] rounded-br-none' : 'bg-white border border-gray-100 rounded-bl-none'}`}>
+                    <div className={`p-1.5 rounded-2xl max-w-[250px] shadow-sm ${isMe ? 'bg-[#8f3546] rounded-br-none' : 'bg-white border border-gray-100 rounded-bl-none'}`}>
                       <img src={msg.message_text} alt="Shared Moodboard" className="w-full rounded-xl object-cover" />
                     </div>
                   </div>
